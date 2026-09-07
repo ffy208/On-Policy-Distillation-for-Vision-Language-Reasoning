@@ -19,6 +19,14 @@ Teacher: `Qwen/Qwen3-VL-8B-Instruct` (fall back to 4B first if GPU memory is tig
 2. Is OPD more data-efficient? (10% / 30% / 100% data-efficiency curve)
 3. Does token-level teacher feedback concentrate on chart-reading numeric tokens or on reasoning-step tokens? (Unique to the VLM setting.)
 
+## Running on Colab
+
+Open the latest notebook directly from GitHub (Colab keeps its own copy, so reopen this link after every push that touches the notebook):
+
+- Stage 0: https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/00_setup_and_eval.ipynb
+
+Known Colab environment issue: installing vLLM upgrades torch to a newer CUDA build while the preinstalled torchaudio stays on the old one, and transformers then fails to import any processor. The install cell removes torchaudio for this reason; if you see `PyTorch and TorchAudio were compiled with different CUDA versions`, run `pip uninstall -y torchaudio` and retry.
+
 ## Repository layout
 
 ```
