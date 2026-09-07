@@ -24,6 +24,54 @@ from .common import DEFAULT_SEED, STUDENT_MODEL, get_hf_token, image_pixel_bound
 logger = logging.getLogger(__name__)
 
 
+def build_training_args(
+    out_dir: str | Path,
+    epochs: float = 2.0,
+    learning_rate: float = 1e-4,
+    per_device_batch_size: int = 4,
+    grad_accum: int = 4,
+    warmup_ratio: float = 0.03,
+    seed: int = DEFAULT_SEED,
+    max_steps: int = -1,
+    logging_steps: int = 10,
+    bf16: bool = True,
+    gradient_checkpointing: bool = True,
+    dataloader_num_workers: int = 2,
+):
+    """TrainingArguments for LoRA SFT, compatible with transformers 4.x and 5.x.
+
+    transformers 5 removed `warmup_ratio`; `warmup_steps` now takes a float in [0, 1) as a ratio.
+    """
+    import inspect
+
+    from transformers import TrainingArguments
+
+    kwargs: dict[str, Any] = {
+        "output_dir": str(Path(out_dir) / "trainer"),
+        "num_train_epochs": epochs,
+        "max_steps": max_steps,
+        "learning_rate": learning_rate,
+        "per_device_train_batch_size": per_device_batch_size,
+        "gradient_accumulation_steps": grad_accum,
+        "lr_scheduler_type": "cosine",
+        "bf16": bf16,
+        "gradient_checkpointing": gradient_checkpointing,
+        "gradient_checkpointing_kwargs": {"use_reentrant": False},
+        "logging_steps": logging_steps,
+        "save_strategy": "no",
+        "report_to": [],
+        "remove_unused_columns": False,  # rows carry PIL images; the collator does all the work
+        "dataloader_num_workers": dataloader_num_workers,
+        "seed": seed,
+        "optim": "adamw_torch",
+    }
+    if "warmup_ratio" in inspect.signature(TrainingArguments.__init__).parameters:
+        kwargs["warmup_ratio"] = warmup_ratio
+    else:
+        kwargs["warmup_steps"] = warmup_ratio
+    return TrainingArguments(**kwargs)
+
+
 def train_sft(
     dataset,
     out_dir: str | Path,
@@ -40,7 +88,7 @@ def train_sft(
     logging_steps: int = 10,
 ) -> dict[str, Any]:
     """Run LoRA SFT and save the adapter to `out_dir/adapter`. Returns training metrics."""
-    from transformers import AutoProcessor, Trainer, TrainingArguments, set_seed
+    from transformers import AutoProcessor, Trainer, set_seed
 
     from .collate import SFTCollator
     from .modeling import load_student_with_lora, trainable_summary
@@ -54,25 +102,9 @@ def train_sft(
         raise RuntimeError(f"vision parameters must stay frozen, found trainable: {summary['vision_trainable'][:3]}")
 
     out_dir = Path(out_dir)
-    args = TrainingArguments(
-        output_dir=str(out_dir / "trainer"),
-        num_train_epochs=epochs,
-        max_steps=max_steps,
-        learning_rate=learning_rate,
-        per_device_train_batch_size=per_device_batch_size,
-        gradient_accumulation_steps=grad_accum,
-        lr_scheduler_type="cosine",
-        warmup_ratio=warmup_ratio,
-        bf16=True,
-        gradient_checkpointing=True,
-        gradient_checkpointing_kwargs={"use_reentrant": False},
-        logging_steps=logging_steps,
-        save_strategy="no",
-        report_to=[],
-        remove_unused_columns=False,  # rows carry PIL images; the collator does all the work
-        dataloader_num_workers=2,
-        seed=seed,
-        optim="adamw_torch",
+    args = build_training_args(
+        out_dir, epochs, learning_rate, per_device_batch_size, grad_accum, warmup_ratio, seed,
+        max_steps, logging_steps,
     )
     trainer = Trainer(
         model=model,
