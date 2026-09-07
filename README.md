@@ -49,6 +49,7 @@ notebooks/
   01_sft.ipynb               teacher generation -> LoRA SFT -> evaluation
   build_*.py                 generate the notebooks above (edit the script, then regenerate)
 configs/            yaml configs
+docs/resume_log.md  measurable results per stage in XYZ form, with the metrics still to capture
 outputs/            metric json files, figures
 tests/              offline unit tests
 ```
