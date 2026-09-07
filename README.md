@@ -113,7 +113,9 @@ The prompt format works, but the student-teacher gap on the random mix is too sm
 | Model | Accuracy | Format rate |
 |-------|----------|-------------|
 | Student Qwen3-VL-2B zero-shot (baseline 0) | 0.668 | 0.960 |
-| Teacher Qwen3-VL-8B zero-shot (teacher upper bound) | pending | pending |
+| Teacher Qwen3-VL-8B zero-shot (teacher upper bound) | 0.844 | 0.992 |
+
+Student-teacher gap: 17.6 points. Evaluation of 500 rows takes 12 s (2B) and 36 s (8B) with vLLM on the A100.
 
 ## Stage progress
 
