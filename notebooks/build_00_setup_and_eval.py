@@ -29,7 +29,9 @@ This notebook is only a driver; all core logic lives in `vlm_opd/*.py` in the re
 code("""# ==================== Config ====================
 REPO_URL  = "https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning.git"
 REPO_DIR  = "/content/vlm_opd_repo"
-DATA_REPO = "ffyang/vlm_opd_chartqa"   # private Hub dataset repo
+QUESTION_SOURCE = "human"   # "human" | "machine" | "all". Human-written ChartQA questions are much harder
+                            # (random mix: 2B student 0.84 / 4B teacher 0.90 zero-shot on 50 rows, too little headroom).
+DATA_REPO = f"ffyang/vlm_opd_chartqa_{QUESTION_SOURCE}"   # private Hub dataset repo, one per question source
 RESULT_REPO = "ffyang/vlm_opd_results"  # optional: also push evaluation json to the Hub
 
 SMOKE = True                 # True: 100/50 rows smoke test; False: 3000/500 full scale
@@ -98,7 +100,7 @@ md("## 4. Sample the data and push to the Hub\n\nSkip this cell if the data has 
 code("""import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-ds = prepare.build_dataset(n_train=N_TRAIN, n_test=N_TEST, seed=SEED, token=token)
+ds = prepare.build_dataset(n_train=N_TRAIN, n_test=N_TEST, seed=SEED, token=token, question_source=QUESTION_SOURCE)
 print(ds)
 ex = ds["test"][0]
 print(ex["id"], ex["image"].size, "|", ex["question"], "->", ex["answer"])
@@ -167,6 +169,8 @@ code("""import json
 summary = {
     "n_test": len(test_ds),
     "seed": SEED,
+    "question_source": QUESTION_SOURCE,
+    "data_repo": DATA_REPO,
     "gpu": GPU_NAME,
     "student_model": common.STUDENT_MODEL,
     "teacher_model": TEACHER_FOR_THIS_GPU,

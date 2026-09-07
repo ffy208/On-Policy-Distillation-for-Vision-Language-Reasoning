@@ -2,6 +2,7 @@
 source_dataset: HuggingFaceM4/ChartQA   # original ChartQA dataset
 hub_repo_id: null                       # private dataset repo, e.g. "username/vlm_opd_chartqa"; set in the notebook
 seed: 42
+question_source: human                  # all | human | machine; human questions are much harder
 n_train: 3000
 n_test: 500
 image_max_side: 768                     # max length of the longer image side (pixels)

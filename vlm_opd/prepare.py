@@ -20,6 +20,10 @@ from .common import DEFAULT_SEED, IMAGE_MAX_SIDE, get_hf_token, resize_image
 logger = logging.getLogger(__name__)
 
 SOURCE_DATASET = "HuggingFaceM4/ChartQA"
+# ChartQA labels each question as human-written or machine-generated. Machine questions are
+# templated and easy (the 2B student already scores ~0.84 zero-shot on a random mix), so the
+# main experiments use human questions only to leave headroom between student and teacher.
+QUESTION_SOURCES = ("all", "human", "machine")
 
 # Unified schema
 UNIFIED_FEATURES = Features(
@@ -47,10 +51,27 @@ def _to_unified(example: dict[str, Any], idx: int, prefix: str, max_side: int) -
     }
 
 
+def filter_question_source(source: Dataset, question_source: str) -> Dataset:
+    """Keep only human-written or machine-generated questions (or everything for "all")."""
+    if question_source not in QUESTION_SOURCES:
+        raise ValueError(f"question_source must be one of {QUESTION_SOURCES}, got {question_source!r}")
+    if question_source == "all":
+        return source
+    label_names = source.features["human_or_machine"].names
+    target = label_names.index(question_source)
+    return source.filter(lambda ex: ex["human_or_machine"] == target, desc=f"Keeping {question_source} questions")
+
+
 def sample_split(
-    source: Dataset, n: int, seed: int, prefix: str, max_side: int = IMAGE_MAX_SIDE
+    source: Dataset,
+    n: int,
+    seed: int,
+    prefix: str,
+    max_side: int = IMAGE_MAX_SIDE,
+    question_source: str = "all",
 ) -> Dataset:
-    """Shuffle with a fixed seed, take the first n rows, resize images, and unify fields."""
+    """Filter by question source, shuffle with a fixed seed, take the first n rows, resize, unify fields."""
+    source = filter_question_source(source, question_source)
     n = min(n, len(source))
     subset = source.shuffle(seed=seed).select(range(n))
     unified = subset.map(
@@ -71,14 +92,15 @@ def build_dataset(
     max_side: int = IMAGE_MAX_SIDE,
     source_dataset: str = SOURCE_DATASET,
     token: str | None = None,
+    question_source: str = "all",
 ) -> DatasetDict:
     """Build the sampled train / test splits from the original ChartQA."""
     token = token or get_hf_token()
     logger.info("Downloading source dataset %s", source_dataset)
     raw = load_dataset(source_dataset, token=token)
-    train = sample_split(raw["train"], n_train, seed, "train", max_side)
-    test = sample_split(raw["test"], n_test, seed, "test", max_side)
-    logger.info("Sampling done: train=%d, test=%d", len(train), len(test))
+    train = sample_split(raw["train"], n_train, seed, "train", max_side, question_source)
+    test = sample_split(raw["test"], n_test, seed, "test", max_side, question_source)
+    logger.info("Sampling done (%s questions): train=%d, test=%d", question_source, len(train), len(test))
     return DatasetDict({"train": train, "test": test})
 
 
@@ -98,10 +120,17 @@ def main() -> None:
     parser.add_argument("--max-side", type=int, default=IMAGE_MAX_SIDE)
     parser.add_argument("--source", type=str, default=SOURCE_DATASET)
     parser.add_argument("--save-dir", type=str, default=None, help="Also save to a local directory")
+    parser.add_argument(
+        "--question-source", type=str, default="all", choices=QUESTION_SOURCES,
+        help="Keep only human-written or machine-generated questions",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    ds = build_dataset(args.n_train, args.n_test, args.seed, args.max_side, args.source)
+    ds = build_dataset(
+        args.n_train, args.n_test, args.seed, args.max_side, args.source,
+        question_source=args.question_source,
+    )
     if args.save_dir:
         ds.save_to_disk(args.save_dir)
         logger.info("Dataset saved locally to %s", args.save_dir)

@@ -51,7 +51,7 @@ tests/              offline unit tests
 | Item | Value |
 |------|-------|
 | Random seed | 42 (passed explicitly to sampling, generation, and training) |
-| Train / test size | 3000 sampled from the ChartQA train split, 500 from the test split |
+| Train / test size | 3000 sampled from the ChartQA train split, 500 from the test split, human-written questions only (`question_source: human`; the machine-generated questions are templated and leave almost no headroom between student and teacher) |
 | Images | longer side ≤ 768 px; processor `min_pixels` / `max_pixels` keep image tokens between 300 and 600 |
 | Prompt | `PROMPT_TEMPLATE` in `vlm_opd/common.py`: reason first, last line `Answer: xxx` |
 | Scoring | relaxed accuracy: numeric answers within 5% relative error; text answers exact after normalization; a missing `Answer:` line counts as wrong |
@@ -82,6 +82,17 @@ pytest
 ```
 
 Evaluation (vLLM) and training (TRL + PEFT) dependencies are installed in separate notebooks. Locally only the GPU-free unit tests run.
+
+## Results
+
+### Stage 0 smoke test (2026-09-07, Tesla T4, 50 test rows, random human+machine mix)
+
+| Model | Accuracy | Format rate |
+|-------|----------|-------------|
+| Student Qwen3-VL-2B zero-shot | 0.84 | 1.00 |
+| Teacher Qwen3-VL-4B zero-shot (8B does not fit on a T4) | 0.90 | 0.98 |
+
+The prompt format works, but the student-teacher gap on the random mix is too small to separate OPD from SFT within the noise of a 500-row test set. The main experiments therefore use human-written questions only.
 
 ## Stage progress
 
