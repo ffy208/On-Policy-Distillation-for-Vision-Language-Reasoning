@@ -29,8 +29,8 @@ This notebook is only a driver; all core logic lives in `vlm_opd/*.py` in the re
 code("""# ==================== Config ====================
 REPO_URL  = "https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning.git"
 REPO_DIR  = "/content/vlm_opd_repo"
-DATA_REPO = "<your-hf-name>/vlm_opd_chartqa"   # private Hub dataset repo
-RESULT_REPO = "<your-hf-name>/vlm_opd_results"  # optional: also push evaluation json to the Hub
+DATA_REPO = "ffyang/vlm_opd_chartqa"   # private Hub dataset repo
+RESULT_REPO = "ffyang/vlm_opd_results"  # optional: also push evaluation json to the Hub
 
 SMOKE = True                 # True: 100/50 rows smoke test; False: 3000/500 full scale
 N_TRAIN = 100 if SMOKE else 3000
@@ -43,11 +43,15 @@ os.makedirs(os.environ["HF_HOME"], exist_ok=True)"""),
 
 md("## 1. Install dependencies\n\nThe evaluation environment installs only vLLM and its matching transformers version, not TRL / PEFT (the training notebook installs those separately)."),
 
-code("""%%capture pip_log
-!pip install -q -U "vllm>=0.8" "transformers>=4.57" "datasets>=3.0" "huggingface_hub>=0.26" qwen-vl-utils pillow pyyaml"""),
+code("""# Install output is written to a log; only the tail is shown. Read the log if anything below fails to import.
+!pip install -q -U "vllm>=0.8" "transformers>=4.57" "datasets>=3.0" "huggingface_hub>=0.26" qwen-vl-utils pillow pyyaml > /content/pip_install.log 2>&1; echo "pip exit code: $?"; tail -n 15 /content/pip_install.log"""),
 
-code("""import subprocess, sys
-print(subprocess.run([sys.executable, "-m", "pip", "show", "vllm", "transformers"], capture_output=True, text=True, check=False).stdout)
+code("""# Sanity check: these imports must succeed in the same interpreter that the evaluation subprocess will use.
+import sys
+print("python:", sys.executable, sys.version.split()[0])
+import torch, transformers, vllm
+print("torch", torch.__version__, "| transformers", transformers.__version__, "| vllm", vllm.__version__)
+print("cuda available:", torch.cuda.is_available())
 !nvidia-smi --query-gpu=name,memory.total --format=csv"""),
 
 md("## 2. Clone the repository and import `vlm_opd`"),
@@ -105,13 +109,29 @@ OUT_DIR = Path("outputs"); OUT_DIR.mkdir(exist_ok=True)
 suffix = "_smoke" if SMOKE else ""
 os.environ["HF_TOKEN"] = token   # only in this process's environment for the subprocess; never written to disk
 
-def eval_in_subprocess(model_id: str, tag: str, gpu_mem: float = 0.85) -> dict:
+def eval_in_subprocess(model_id: str, tag: str, gpu_mem: float = 0.85, limit: int | None = None) -> dict:
+    \"\"\"Run vlm_opd.evaluate in a child process, streaming its output and saving a full log.
+
+    On failure the last lines of the log are printed so the real error is visible here,
+    instead of only the CalledProcessError from the wrapper.
+    \"\"\"
     out = OUT_DIR / f"eval_{tag}{suffix}.json"
+    log_path = OUT_DIR / f"eval_{tag}{suffix}.log"
     cmd = [sys.executable, "-m", "vlm_opd.evaluate",
            "--model", model_id, "--data-repo", DATA_REPO, "--split", "test",
            "--out", str(out), "--tag", tag, "--seed", str(SEED), "--gpu-mem", str(gpu_mem)]
+    if limit:
+        cmd += ["--limit", str(limit)]
     print("$", " ".join(cmd))
-    subprocess.run(cmd, check=True)
+    with log_path.open("w") as log:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        for line in proc.stdout:
+            log.write(line)
+            sys.stdout.write(line)
+        rc = proc.wait()
+    if rc != 0:
+        tail = "".join(log_path.read_text().splitlines(keepends=True)[-40:])
+        raise RuntimeError(f"evaluation subprocess failed (exit {rc}); full log: {log_path}\\n--- log tail ---\\n{tail}")
     res = json.loads(out.read_text())
     print(f"[{tag}] acc = {res['accuracy']:.4f}  format = {res['format_rate']:.4f}  n = {res['n']}  ({res['elapsed_sec']}s)")
     return res"""),
