@@ -1,0 +1,8 @@
+# vLLM evaluation config (Stage 0)
+student_model: Qwen/Qwen3-VL-2B-Instruct
+teacher_model: Qwen/Qwen3-VL-8B-Instruct
+max_new_tokens: 512
+temperature: 0.0          # greedy decoding for evaluation
+max_model_len: 4096
+gpu_memory_utilization: 0.85
+seed: 42

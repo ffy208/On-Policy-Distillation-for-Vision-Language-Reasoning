@@ -1,0 +1,44 @@
+[project]
+name = "vlm-opd"
+version = "0.1.0"
+description = "On-Policy Distillation for Vision-Language Reasoning (Qwen3-VL, ChartQA)"
+requires-python = ">=3.10"
+dependencies = [
+    "datasets>=3.0",
+    "huggingface_hub>=0.26",
+    "pillow>=10.0",
+    "pyyaml>=6.0",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# Evaluation environment: vLLM (installed separately from training deps to avoid version conflicts)
+eval = [
+    "vllm>=0.8",
+    "transformers>=4.57",
+    "qwen-vl-utils",
+]
+# Training environment: transformers + TRL + PEFT
+train = [
+    "torch>=2.4",
+    "transformers>=4.57",
+    "trl>=0.12",
+    "peft>=0.13",
+    "accelerate>=1.0",
+    "qwen-vl-utils",
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.setuptools.packages.find]
+include = ["vlm_opd*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["*.ipynb", "temp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets and local environment
+.env
+.env.*
+settings.json
+*.pem
+*.key
+
+# Large files and caches (models, data, checkpoints all live on the HuggingFace Hub, not in git)
+hf_cache/
+ckpt/
+data/
+*.safetensors
+*.bin
+*.pt
+
+# Temporary files
+temp/
+.ipynb_checkpoints/
+.DS_Store
+
+# Outputs: keep small json/figures, ignore large files
+outputs/**/*.jsonl
+
+# Claude Code session logs
+.claude/logs/
+.claude/session-context-*.md
