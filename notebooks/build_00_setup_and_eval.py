@@ -59,7 +59,14 @@ import torch, transformers, vllm
 from transformers import AutoProcessor  # pulls in processing_utils; this is where a stale torchaudio would fail
 print("torch", torch.__version__, "(cuda", torch.version.cuda, ") | transformers", transformers.__version__, "| vllm", vllm.__version__)
 print("cuda available:", torch.cuda.is_available())
-!nvidia-smi --query-gpu=name,memory.total --format=csv"""),
+GPU_NAME = torch.cuda.get_device_name(0)
+GPU_GB = torch.cuda.get_device_properties(0).total_memory / 1024**3
+print(f"GPU: {GPU_NAME} ({GPU_GB:.1f} GB)")
+if GPU_GB < 30:
+    print("WARNING: this is not a 40 GB A100. The 8B teacher does not fit; the notebook will fall back to the 4B teacher.")
+    print("         For the real experiments switch to an A100 via Runtime > Change runtime type.")
+if not torch.cuda.is_bf16_supported():
+    print("WARNING: no bf16 support on this GPU; vLLM falls back to fp16 for evaluation.")"""),
 
 md("## 2. Clone the repository and import `vlm_opd`"),
 
@@ -147,8 +154,11 @@ code("""# 5a. Student zero-shot (baseline 0)
 student_res = eval_in_subprocess(common.STUDENT_MODEL, "student_zeroshot")
 print(student_res["records"][0]["output"][:600])"""),
 
-code("""# 5b. Teacher zero-shot (teacher upper bound). If the 8B model OOMs on 40 GB, switch to common.TEACHER_MODEL_SMALL
-teacher_res = eval_in_subprocess(common.TEACHER_MODEL, "teacher_zeroshot", gpu_mem=0.9)
+code("""# 5b. Teacher zero-shot (teacher upper bound).
+# The 8B teacher needs ~16 GB of weights alone, so on GPUs under 30 GB (e.g. a 15 GB T4) fall back to the 4B teacher.
+TEACHER_FOR_THIS_GPU = common.TEACHER_MODEL if GPU_GB >= 30 else common.TEACHER_MODEL_SMALL
+print("teacher:", TEACHER_FOR_THIS_GPU)
+teacher_res = eval_in_subprocess(TEACHER_FOR_THIS_GPU, "teacher_zeroshot", gpu_mem=0.9)
 print(teacher_res["records"][0]["output"][:600])"""),
 
 md("## 6. Summarize and save\n\nIf teacher zero-shot accuracy is below 60%, switch to Geometry3K as described in the project plan."),
@@ -157,6 +167,9 @@ code("""import json
 summary = {
     "n_test": len(test_ds),
     "seed": SEED,
+    "gpu": GPU_NAME,
+    "student_model": common.STUDENT_MODEL,
+    "teacher_model": TEACHER_FOR_THIS_GPU,
     "student_zeroshot": student_res["accuracy"],
     "teacher_zeroshot": teacher_res["accuracy"],
     "student_format_rate": student_res["format_rate"],
