@@ -245,8 +245,9 @@ def get_hf_token() -> str | None:
     if userdata is not None:
         try:
             token = userdata.get("HF_TOKEN")
-        except Exception as e:  # noqa: BLE001 - Colab raises SecretNotFoundError / NotebookAccessError
-            logger.warning("Failed to read Colab secret HF_TOKEN: %s", type(e).__name__)
+        except Exception as e:  # noqa: BLE001 - Colab raises SecretNotFoundError / NotebookAccessError;
+            # in a subprocess `userdata.get` raises AttributeError because there is no frontend; fall back to env.
+            logger.debug("Colab secret HF_TOKEN not readable here (%s); falling back to env", type(e).__name__)
             token = None
         if token:
             return token
