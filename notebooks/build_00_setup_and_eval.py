@@ -46,7 +46,11 @@ os.makedirs(os.environ["HF_HOME"], exist_ok=True)"""),
 md("## 1. Install dependencies\n\nThe evaluation environment installs only vLLM and its matching transformers version, not TRL / PEFT (the training notebook installs those separately)."),
 
 code("""# Install output is written to a log; only the tail is shown. Read the log if anything below fails to import.
-!pip install -q -U "vllm>=0.8" "transformers>=4.57" "datasets>=3.0" "huggingface_hub>=0.26" qwen-vl-utils pillow pyyaml > /content/pip_install.log 2>&1; echo "pip exit code: $?"; tail -n 15 /content/pip_install.log
+!pip install -q -U "vllm>=0.8" "transformers>=4.57" "datasets>=3.0" "huggingface_hub>=0.26" qwen-vl-utils pyyaml > /content/pip_install.log 2>&1; echo "pip exit code: $?"; tail -n 15 /content/pip_install.log
+
+# Pillow: never pass it through `-U` on Colab. Upgrading it in place has left a mix of two versions on disk
+# (ImportError: cannot import name '_Ink' from 'PIL._typing'). Reinstall it cleanly instead.
+!pip install -q --force-reinstall --no-deps pillow 2>&1 | tail -n 2; echo "pillow reinstalled"
 
 # vLLM upgrades torch (and torchvision) to a newer CUDA build, but Colab's preinstalled torchaudio stays on the
 # old CUDA build. transformers imports torchaudio when loading any processor and torchaudio then fails its CUDA
@@ -57,8 +61,11 @@ code("""# Install output is written to a log; only the tail is shown. Read the l
 code("""# Sanity check: these imports must succeed in the same interpreter that the evaluation subprocess will use.
 import sys
 print("python:", sys.executable, sys.version.split()[0])
+import PIL
+from PIL import Image  # a mixed Pillow install fails here
 import torch, transformers, vllm
 from transformers import AutoProcessor  # pulls in processing_utils; this is where a stale torchaudio would fail
+print("pillow", PIL.__version__)
 print("torch", torch.__version__, "(cuda", torch.version.cuda, ") | transformers", transformers.__version__, "| vllm", vllm.__version__)
 print("cuda available:", torch.cuda.is_available())
 GPU_NAME = torch.cuda.get_device_name(0)
