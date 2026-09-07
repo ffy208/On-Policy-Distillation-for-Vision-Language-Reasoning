@@ -35,6 +35,7 @@ DATA_REPO = f"ffyang/vlm_opd_chartqa_{QUESTION_SOURCE}"   # private Hub dataset 
 RESULT_REPO = "ffyang/vlm_opd_results"  # optional: also push evaluation json to the Hub
 
 SMOKE = True                 # True: 100/50 rows smoke test; False: 3000/500 full scale
+REBUILD_DATA = True          # False: skip sampling/pushing and load the existing dataset from the Hub (partial reruns)
 N_TRAIN = 100 if SMOKE else 3000
 N_TEST  = 50  if SMOKE else 500
 SEED    = 42
@@ -107,12 +108,15 @@ md("## 4. Sample the data and push to the Hub\n\nSkip this cell if the data has 
 code("""import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-ds = prepare.build_dataset(n_train=N_TRAIN, n_test=N_TEST, seed=SEED, token=token, question_source=QUESTION_SOURCE)
-print(ds)
-ex = ds["test"][0]
-print(ex["id"], ex["image"].size, "|", ex["question"], "->", ex["answer"])
-display(ex["image"])
-prepare.push(ds, DATA_REPO, token=token)"""),
+if REBUILD_DATA:
+    ds = prepare.build_dataset(n_train=N_TRAIN, n_test=N_TEST, seed=SEED, token=token, question_source=QUESTION_SOURCE)
+    print(ds)
+    ex = ds["test"][0]
+    print(ex["id"], ex["image"].size, "|", ex["question"], "->", ex["answer"])
+    display(ex["image"])
+    prepare.push(ds, DATA_REPO, token=token)
+else:
+    print("REBUILD_DATA is False: using the existing dataset at", DATA_REPO)"""),
 
 code("""# Load the test split back from the Hub to confirm it is readable
 test_ds = common.load_hub_dataset(DATA_REPO, "test", token=token)
