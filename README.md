@@ -28,7 +28,7 @@ Open the latest notebook directly from GitHub (Colab keeps its own copy, so reop
 
 Known Colab environment issue: installing vLLM upgrades torch to a newer CUDA build while the preinstalled torchaudio stays on the old one, and transformers then fails to import any processor. The install cell removes torchaudio for this reason; if you see `PyTorch and TorchAudio were compiled with different CUDA versions`, run `pip uninstall -y torchaudio` and retry.
 
-A second Colab issue: upgrading Pillow in place can leave a mix of two versions on disk (`ImportError: cannot import name '_Ink' from 'PIL._typing'`). The install cell reinstalls Pillow cleanly; if you hit this, run `pip install --force-reinstall --no-deps pillow`, then restart the runtime.
+A second Colab issue: the Pillow directory ends up with a mix of Pillow 11 and 12 files (`ImportError: cannot import name '_Ink' from 'PIL._typing'`), and a plain force-reinstall does not always clear it. Each notebook has a repair cell that deletes the `PIL` directory, installs Pillow 12 with `PIP_CONSTRAINT` unset, and verifies `import PIL.ImageText` in a fresh subprocess. If you hit the error in a running kernel, run that cell and restart the runtime.
 
 ## Repository layout
 

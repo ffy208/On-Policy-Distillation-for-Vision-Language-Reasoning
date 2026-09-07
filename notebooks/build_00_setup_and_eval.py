@@ -49,15 +49,27 @@ md("## 1. Install dependencies\n\nThe evaluation environment installs only vLLM 
 code("""# Install output is written to a log; only the tail is shown. Read the log if anything below fails to import.
 !pip install -q -U "vllm>=0.8" "transformers>=4.57" "datasets>=3.0" "huggingface_hub>=0.26" qwen-vl-utils pyyaml > /content/pip_install.log 2>&1; echo "pip exit code: $?"; tail -n 15 /content/pip_install.log
 
-# Pillow: never pass it through `-U` on Colab. Upgrading it in place has left a mix of two versions on disk
-# (ImportError: cannot import name '_Ink' from 'PIL._typing'). Reinstall it cleanly instead.
-!pip install -q --force-reinstall --no-deps pillow 2>&1 | tail -n 2; echo "pillow reinstalled"
-
 # vLLM upgrades torch (and torchvision) to a newer CUDA build, but Colab's preinstalled torchaudio stays on the
 # old CUDA build. transformers imports torchaudio when loading any processor and torchaudio then fails its CUDA
 # version check. We never use audio, so remove it instead of trying to match versions.
 !pip uninstall -y -q torchaudio 2>/dev/null; echo "torchaudio removed"
 """),
+
+code("""# Pillow repair. Colab ends up with a mix of Pillow 11 and 12 files in one directory
+# (ImportError: cannot import name '_Ink' from 'PIL._typing'); a plain force-reinstall does not clear it and Colab may pin
+# pillow through PIP_CONSTRAINT. Remove every trace, install Pillow 12 ignoring constraints, verify in a fresh subprocess.
+import glob, os, shutil, subprocess, sys, sysconfig
+site = sysconfig.get_paths()["purelib"]
+print("PIP_CONSTRAINT:", os.environ.get("PIP_CONSTRAINT"))
+subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "-q", "pillow"], check=False)
+for p in glob.glob(os.path.join(site, "PIL")) + glob.glob(os.path.join(site, "[Pp]illow*")):
+    shutil.rmtree(p, ignore_errors=True); print("removed", p)
+env = {**os.environ, "PIP_CONSTRAINT": ""}
+subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-deps", "pillow>=12"], check=True, env=env)
+chk = subprocess.run([sys.executable, "-c", "import PIL, PIL.ImageText; print('pillow', PIL.__version__, 'ok')"],
+                     capture_output=True, text=True)
+print(chk.stdout or chk.stderr)
+assert chk.returncode == 0, "Pillow is still broken, see the message above\""""),
 
 code("""# Sanity check: these imports must succeed in the same interpreter that the evaluation subprocess will use.
 import sys
