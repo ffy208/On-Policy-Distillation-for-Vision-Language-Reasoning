@@ -24,6 +24,7 @@ Teacher: `Qwen/Qwen3-VL-8B-Instruct` (fall back to 4B first if GPU memory is tig
 Open the latest notebook directly from GitHub (Colab keeps its own copy, so reopen this link after every push that touches the notebook):
 
 - Stage 0: https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/00_setup_and_eval.ipynb
+- Stage 1: https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/01_sft.ipynb
 
 Known Colab environment issue: installing vLLM upgrades torch to a newer CUDA build while the preinstalled torchaudio stays on the old one, and transformers then fails to import any processor. The install cell removes torchaudio for this reason; if you see `PyTorch and TorchAudio were compiled with different CUDA versions`, run `pip uninstall -y torchaudio` and retry.
 
@@ -37,12 +38,16 @@ vlm_opd/
   hub_utils.py      checkpoint push to the HF Hub and resume after disconnect
   prepare.py        ChartQA sampling, image resizing, push to a Hub dataset repo
   evaluate.py       vLLM batch inference + scoring -> json
-  sft.py            (Stage 1) supervised distillation with TRL SFTTrainer
+  generate_teacher.py (Stage 1) sample teacher solutions with vLLM, keep the correct ones, push as SFT data
+  collate.py        (Stage 1/2) prompt encoding and supervised batches with prompt/image positions masked
+  modeling.py       (Stage 1/2) student loader: frozen base + vision, LoRA on language-model projections only
+  sft.py            (Stage 1) LoRA SFT with the transformers Trainer, merge + push to Hub
   opd_trainer.py    (Stage 2) on-policy distillation training loop
   analysis/         (Stage 4) token heatmaps
 notebooks/
-  00_setup_and_eval.ipynb    install deps, sample data, zero-shot evaluation (this stage)
-  build_00_setup_and_eval.py generates the notebook above (edit this script, then regenerate)
+  00_setup_and_eval.ipynb    install deps, sample data, zero-shot evaluation
+  01_sft.ipynb               teacher generation -> LoRA SFT -> evaluation
+  build_*.py                 generate the notebooks above (edit the script, then regenerate)
 configs/            yaml configs
 outputs/            metric json files, figures
 tests/              offline unit tests
@@ -66,6 +71,13 @@ tests/              offline unit tests
 - The HF token lives in Colab Secrets (`HF_TOKEN`) and is read through `common.get_hf_token()`.
 - Checkpoints go to a private Hub model repo: LoRA weights + optimizer state only, every 50 steps; `latest.txt` records the latest step, and `hub_utils.load_latest()` resumes after a disconnect.
 - The sampled dataset goes to a private Hub dataset repo with the unified schema `{id, image, question, answer}`.
+
+## Stage 1 design notes
+
+- The teacher answers each training question once at temperature 0.7; only solutions whose final answer scores correct are kept (`generate_teacher.py`). Set `--num-samples k` to rejection-sample k candidates per question.
+- SFT uses the plain transformers `Trainer` with `SFTCollator` rather than TRL's `SFTTrainer`. The collator encodes the prompt (with the image) through the processor and appends the separately tokenized response plus `<|im_end|>`, so labels are exactly -100 on every prompt and image position. TRL's VLM path changes between releases and its dependencies clash with vLLM; peft + accelerate install next to vLLM, so one Colab environment runs generation, training, and evaluation with no restarts.
+- LoRA (rank 64, alpha 128) targets only the language-model projections (`q/k/v/o/gate/up/down_proj` under `language_model`). The vision tower and projector stay frozen; `trainable_summary()` asserts this at startup.
+- After training the adapter is merged into the base weights and pushed as a standalone model, so evaluation reuses `evaluate.py` unchanged instead of relying on vLLM's LoRA support for Qwen3-VL.
 
 ## Verified external assumptions (2026-09-07)
 
@@ -96,10 +108,17 @@ Evaluation (vLLM) and training (TRL + PEFT) dependencies are installed in separa
 
 The prompt format works, but the student-teacher gap on the random mix is too small to separate OPD from SFT within the noise of a 500-row test set. The main experiments therefore use human-written questions only.
 
+### Stage 0 baseline (2026-09-07, A100 40 GB, 500 human-written test questions, seed 42)
+
+| Model | Accuracy | Format rate |
+|-------|----------|-------------|
+| Student Qwen3-VL-2B zero-shot (baseline 0) | 0.668 | 0.960 |
+| Teacher Qwen3-VL-8B zero-shot (teacher upper bound) | pending | pending |
+
 ## Stage progress
 
 - [x] Stage 0: repository layout, `common.py`, `hub_utils.py`, `prepare.py`, `evaluate.py`, `00_setup_and_eval.ipynb`
-- [ ] Stage 1: SFT baseline
+- [x] Stage 1 code: `generate_teacher.py`, `collate.py`, `modeling.py`, `sft.py`, `01_sft.ipynb` (smoke run on Colab pending)
 - [ ] Stage 2: OPD training loop
 - [ ] Stage 3: data-efficiency curve
 - [ ] Stage 4: token-level feedback visualization

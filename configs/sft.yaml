@@ -1,0 +1,22 @@
+# Stage 1: supervised distillation
+teacher_generation:
+  model: Qwen/Qwen3-VL-8B-Instruct
+  data_repo: ffyang/vlm_opd_chartqa_human
+  out_repo: ffyang/vlm_opd_sft_human
+  num_samples: 1            # solutions sampled per question; the first correct one is kept
+  temperature: 0.7
+  max_new_tokens: 512
+  seed: 42
+training:
+  model: Qwen/Qwen3-VL-2B-Instruct
+  epochs: 2
+  learning_rate: 1.0e-4
+  per_device_batch_size: 4
+  grad_accum: 4             # effective batch 16
+  lora_r: 64
+  lora_alpha: 128
+  lora_dropout: 0.05
+  max_length: 2048
+  seed: 42
+  adapter_repo: ffyang/vlm_opd_sft_human_lora
+  merged_repo: ffyang/vlm_opd_sft_human_merged
