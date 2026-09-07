@@ -30,6 +30,8 @@ Known Colab environment issue: installing vLLM upgrades torch to a newer CUDA bu
 
 A second Colab issue: the Pillow directory ends up with a mix of Pillow 11 and 12 files (`ImportError: cannot import name '_Ink' from 'PIL._typing'`), and a plain force-reinstall does not always clear it. Each notebook has a repair cell that deletes the `PIL` directory, installs Pillow 12 with `PIP_CONSTRAINT` unset, and verifies `import PIL.ImageText` in a fresh subprocess. If you hit the error in a running kernel, run that cell and restart the runtime.
 
+A third Colab issue: peft checks the installed `torchao` when injecting LoRA and rejects Colab's preinstalled torchao 0.10 (`Found an incompatible version of torchao ... only versions above 0.16.0 are supported`). We never quantize, so the Stage 1 install cell uninstalls torchao; peft then skips the check.
+
 ## Repository layout
 
 ```

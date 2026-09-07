@@ -46,7 +46,10 @@ os.makedirs(os.environ["HF_HOME"], exist_ok=True)"""),
 md("## 1. Install dependencies"),
 
 code("""!pip install -q -U "vllm>=0.8" "transformers>=4.57" "datasets>=3.0" "huggingface_hub>=0.26" "peft>=0.13" "accelerate>=1.0" qwen-vl-utils pyyaml > /content/pip_install.log 2>&1; echo "pip exit code: $?"; tail -n 15 /content/pip_install.log
-!pip uninstall -y -q torchaudio 2>/dev/null; echo "torchaudio removed\""""),
+!pip uninstall -y -q torchaudio 2>/dev/null; echo "torchaudio removed"
+# peft probes torchao when wrapping linear layers and refuses Colab's preinstalled torchao 0.10 (needs >= 0.16).
+# We never quantize, so remove it; peft then skips the probe.
+!pip uninstall -y -q torchao 2>/dev/null; echo "torchao removed\""""),
 
 code("""# Pillow repair. Colab ends up with a mix of Pillow 11 and 12 files in one directory
 # (ImportError: cannot import name '_Ink' from 'PIL._typing'); a plain force-reinstall does not clear it and Colab may pin
@@ -69,6 +72,8 @@ print("python:", sys.executable, sys.version.split()[0])
 from PIL import Image
 import torch, transformers, vllm, peft, accelerate
 from transformers import AutoProcessor
+from peft.import_utils import is_torchao_available
+assert not is_torchao_available(), "torchao is still installed; peft will refuse to wrap layers (run the install cell again)"
 print("torch", torch.__version__, "(cuda", torch.version.cuda, ") | transformers", transformers.__version__,
       "| vllm", vllm.__version__, "| peft", peft.__version__)
 GPU_NAME = torch.cuda.get_device_name(0); GPU_GB = torch.cuda.get_device_properties(0).total_memory / 1024**3
