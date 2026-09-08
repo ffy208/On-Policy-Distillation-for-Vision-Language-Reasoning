@@ -51,21 +51,35 @@ code("""!pip install -q -U "vllm>=0.8" "transformers>=4.57" "datasets>=3.0" "hug
 # We never quantize, so remove it; peft then skips the probe.
 !pip uninstall -y -q torchao 2>/dev/null; echo "torchao removed\""""),
 
-code("""# Pillow repair. Colab ends up with a mix of Pillow 11 and 12 files in one directory
-# (ImportError: cannot import name '_Ink' from 'PIL._typing'); a plain force-reinstall does not clear it and Colab may pin
-# pillow through PIP_CONSTRAINT. Remove every trace, install Pillow 12 ignoring constraints, verify in a fresh subprocess.
-import glob, os, shutil, subprocess, sys, sysconfig
-site = sysconfig.get_paths()["purelib"]
-print("PIP_CONSTRAINT:", os.environ.get("PIP_CONSTRAINT"))
-subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "-q", "pillow"], check=False)
-for p in glob.glob(os.path.join(site, "PIL")) + glob.glob(os.path.join(site, "[Pp]illow*")):
-    shutil.rmtree(p, ignore_errors=True); print("removed", p)
-env = {**os.environ, "PIP_CONSTRAINT": ""}
-subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-deps", "pillow>=12"], check=True, env=env)
-chk = subprocess.run([sys.executable, "-c", "import PIL, PIL.ImageText; print('pillow', PIL.__version__, 'ok')"],
-                     capture_output=True, text=True)
-print(chk.stdout or chk.stderr)
-assert chk.returncode == 0, "Pillow is still broken, see the message above\""""),
+code("""# Pillow repair. Colab can end up with a mix of Pillow 11 and 12 files in one directory
+# (ImportError: cannot import name '_Ink' from 'PIL._typing'). Two subtleties:
+#  - a plain force-reinstall does not clear the stale files and Colab may pin pillow via PIP_CONSTRAINT;
+#  - the Colab kernel imports PIL at startup, so after repairing the files on disk the kernel still holds the old
+#    modules in memory and must be restarted once. This cell is idempotent: it skips when Pillow is healthy, and
+#    restarts the runtime automatically after a repair. After the restart, run this cell again (it will skip), then continue.
+import glob, os, shutil, subprocess, sys, sysconfig, time
+
+def pillow_healthy() -> bool:
+    chk = subprocess.run([sys.executable, "-c", "import PIL, PIL.ImageText; assert int(PIL.__version__.split('.')[0]) >= 12; print(PIL.__version__)"],
+                         capture_output=True, text=True)
+    print("pillow check:", (chk.stdout or chk.stderr).strip())
+    return chk.returncode == 0
+
+if pillow_healthy():
+    print("Pillow OK, no repair needed")
+else:
+    site = sysconfig.get_paths()["purelib"]
+    print("PIP_CONSTRAINT:", os.environ.get("PIP_CONSTRAINT"))
+    subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "-q", "pillow"], check=False)
+    for p in glob.glob(os.path.join(site, "PIL")) + glob.glob(os.path.join(site, "[Pp]illow*")):
+        shutil.rmtree(p, ignore_errors=True); print("removed", p)
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-deps", "pillow>=12"], check=True,
+                   env={**os.environ, "PIP_CONSTRAINT": ""})
+    assert pillow_healthy(), "Pillow is still broken after reinstall"
+    print("Pillow repaired on disk. The kernel still holds the old PIL modules, restarting the runtime in 3 s...")
+    print("After it comes back: re-run this cell (it will report OK), then continue with the next cell.")
+    time.sleep(3)
+    os.kill(os.getpid(), 9)"""),
 
 code("""import sys
 print("python:", sys.executable, sys.version.split()[0])
