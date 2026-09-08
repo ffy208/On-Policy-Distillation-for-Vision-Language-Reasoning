@@ -25,6 +25,7 @@ Open the latest notebook directly from GitHub (Colab keeps its own copy, so reop
 
 - Stage 0: https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/00_setup_and_eval.ipynb
 - Stage 1: https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/01_sft.ipynb
+- Stage 2: https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/02_opd.ipynb
 
 Known Colab environment issue: installing vLLM upgrades torch to a newer CUDA build while the preinstalled torchaudio stays on the old one, and transformers then fails to import any processor. The install cell removes torchaudio for this reason; if you see `PyTorch and TorchAudio were compiled with different CUDA versions`, run `pip uninstall -y torchaudio` and retry.
 
@@ -44,11 +45,13 @@ vlm_opd/
   collate.py        (Stage 1/2) prompt encoding and supervised batches with prompt/image positions masked
   modeling.py       (Stage 1/2) student loader: frozen base + vision, LoRA on language-model projections only
   sft.py            (Stage 1) LoRA SFT with the transformers Trainer, merge + push to Hub
-  opd_trainer.py    (Stage 2) on-policy distillation training loop
+  opd_utils.py      (Stage 2) rollout inputs, generation masks, per-token KL, vision-batch slicing (pure tensors)
+  opd_trainer.py    (Stage 2) on-policy distillation loop: rollout -> teacher/student scoring -> KL -> LoRA update
   analysis/         (Stage 4) token heatmaps
 notebooks/
   00_setup_and_eval.ipynb    install deps, sample data, zero-shot evaluation
   01_sft.ipynb               teacher generation -> LoRA SFT -> evaluation
+  02_opd.ipynb               on-policy distillation with Hub checkpoints and automatic resume
   build_*.py                 generate the notebooks above (edit the script, then regenerate)
 configs/            yaml configs
 docs/resume_log.md  measurable results per stage in XYZ form, with the metrics still to capture
@@ -81,6 +84,14 @@ tests/              offline unit tests
 - SFT uses the plain transformers `Trainer` with `SFTCollator` rather than TRL's `SFTTrainer`. The collator encodes the prompt (with the image) through the processor and appends the separately tokenized response plus `<|im_end|>`, so labels are exactly -100 on every prompt and image position. TRL's VLM path changes between releases and its dependencies clash with vLLM; peft + accelerate install next to vLLM, so one Colab environment runs generation, training, and evaluation with no restarts.
 - LoRA (rank 64, alpha 128) targets only the language-model projections (`q/k/v/o/gate/up/down_proj` under `language_model`). The vision tower and projector stay frozen; `trainable_summary()` asserts this at startup.
 - After training the adapter is merged into the base weights and pushed as a standalone model, so evaluation reuses `evaluate.py` unchanged instead of relying on vLLM's LoRA support for Qwen3-VL.
+
+## Stage 2 design notes
+
+- Rollouts are sampled with `do_sample=True`, temperature 1.0, `top_k=0`, `top_p=1.0`, never greedy: the whole point of on-policy training is covering the states the student actually reaches. Prompts are left-padded so every generation starts at the same index.
+- Teacher and student score the identical token sequence and the identical `pixel_values`; the vision encoder runs once per model. Logits are computed only for the generated span via `logits_to_keep`, which keeps the two vocabulary-sized tensors at about 1.2 GB each for batch 8 x 512 tokens.
+- The loss is the exact full-vocabulary per-token KL, `reverse` = KL(student || teacher) by default (`--kl-direction forward` for the ablation), averaged over generated tokens up to and including the first `<|im_end|>`. Prompt, image, and post-EOS padding positions are masked out. The KL is computed in fp32 chunks of 64 positions; a batch is processed in micro-batches with gradient accumulation so peak memory stays bounded.
+- Every step logs per-token KL, mean and max rollout length, EOS rate, `Answer:` format rate, rollout accuracy against gold, time split into rollout / teacher forward / student forward-backward, peak GPU memory, learning rate, and gradient norm to `opd_log.jsonl`. These are the quantities the resume log needs.
+- Every `ckpt_every` steps the LoRA adapter, optimizer, scheduler, data cursor, and epoch go to the Hub with a `latest.txt` pointer; re-running the notebook resumes from there. Data order is a seeded permutation per epoch and rollout sampling is seeded per step, so a resumed run follows the same trajectory.
 
 ## Verified external assumptions (2026-09-07)
 
@@ -124,7 +135,7 @@ Student-teacher gap: 17.6 points. Evaluation of 500 rows takes 12 s (2B) and 36 
 
 - [x] Stage 0: repository layout, `common.py`, `hub_utils.py`, `prepare.py`, `evaluate.py`, `00_setup_and_eval.ipynb`
 - [x] Stage 1 code: `generate_teacher.py`, `collate.py`, `modeling.py`, `sft.py`, `01_sft.ipynb` (smoke run on Colab pending)
-- [ ] Stage 2: OPD training loop
+- [x] Stage 2 code: `opd_utils.py`, `opd_trainer.py`, `02_opd.ipynb` (Colab smoke run pending)
 - [ ] Stage 3: data-efficiency curve
 - [ ] Stage 4: token-level feedback visualization
 - [ ] Stage 5 (optional): self-distillation (SDPO)
