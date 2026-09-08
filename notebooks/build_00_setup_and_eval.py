@@ -80,10 +80,14 @@ else:
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-deps", "pillow>=12"], check=True,
                    env={**os.environ, "PIP_CONSTRAINT": ""})
     assert pillow_healthy(), "Pillow is still broken after reinstall"
-    print("Pillow repaired on disk. The kernel still holds the old PIL modules, restarting the runtime in 3 s...")
-    print("After it comes back: re-run this cell (it will report OK), then continue with the next cell.")
-    time.sleep(3)
-    os.kill(os.getpid(), 9)"""),
+    print("Pillow repaired on disk. The kernel still holds the old PIL modules, so the runtime restarts now.")
+    print("This is expected, not a crash. When it comes back, run the cells from the top again: the install is instant,")
+    print("this cell reports 'Pillow OK', and everything continues.")
+    time.sleep(2)
+    try:
+        get_ipython().kernel.do_shutdown(restart=True)   # clean Jupyter restart, no 'session crashed' dialog
+    except Exception:
+        os.kill(os.getpid(), 9)"""),
 
 code("""# Sanity check: these imports must succeed in the same interpreter that the evaluation subprocess will use.
 import sys
