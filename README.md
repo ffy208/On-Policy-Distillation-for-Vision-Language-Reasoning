@@ -130,6 +130,7 @@ The prompt format works, but the student-teacher gap on the random mix is too sm
 | Teacher Qwen3-VL-8B zero-shot (teacher upper bound) | 0.844 | 0.992 |
 | SFT student, smoke run (82 solutions, 20 steps) | 0.780 | 0.982 |
 | SFT student, full run (2402 solutions, 302 steps, 2 epochs) | 0.834 | 0.988 |
+| OPD student, smoke run (100 questions, 20 steps, batch 8, reverse KL) | 0.792 | 0.966 |
 
 Student-teacher gap: 17.6 points. Evaluation of 500 rows takes 12 s (2B) and 36 s (8B) with vLLM on the A100.
 
@@ -137,7 +138,7 @@ Student-teacher gap: 17.6 points. Evaluation of 500 rows takes 12 s (2B) and 36 
 
 - [x] Stage 0: repository layout, `common.py`, `hub_utils.py`, `prepare.py`, `evaluate.py`, `00_setup_and_eval.ipynb`
 - [x] Stage 1: SFT baseline 0.834 (teacher 0.844, zero-shot 0.668); 80.1% teacher acceptance over 3000 questions
-- [x] Stage 2 code: `opd_utils.py`, `opd_trainer.py`, `02_opd.ipynb` (Colab smoke run pending)
+- [x] Stage 2 code smoke-tested on the A100: 33 s/step at batch 8, peak 27 GB, KL 0.42 -> 0.26 in 20 steps, OPD smoke student 0.792
 - [ ] Stage 3: data-efficiency curve
 - [ ] Stage 4: token-level feedback visualization
 - [ ] Stage 5 (optional): self-distillation (SDPO)

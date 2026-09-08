@@ -29,6 +29,12 @@ Qwen3-VL-8B-Instruct. Task: ChartQA, human-written questions, 3000 train / 500 t
 - Design consequence recorded 2026-09-08: with SFT at 0.834 and the teacher at 0.844, full-data OPD-vs-SFT differences fall inside the ~3 to 4 point confidence interval of a 500-question test set. The data-efficiency curve (300 / 900 / 3000 questions) therefore becomes the primary comparison, with an optional out-of-distribution evaluation as a secondary axis.
 - Accomplished a Colab environment that runs vLLM inference and peft training in one runtime with no restarts, as measured by four resolved preinstalled-package conflicts (torchaudio CUDA mismatch, mixed Pillow 11/12 files, torchao 0.10 rejected by peft, and an 8B-teacher OOM on a 15 GB T4) plus one transformers 5 API change (`warmup_ratio` removed), by adding install-time repairs, import-time assertions, GPU-memory-aware model selection, and version-adaptive TrainingArguments construction.
 
+### Stage 2 (smoke run passed 2026-09-08, full runs pending)
+
+- Accomplished a working on-policy distillation loop for a VLM on a single 40 GB GPU, as measured by a 20-step smoke run (batch 8 rollouts, 100 questions, reverse KL) with per-token KL falling from 0.421 to 0.262, peak GPU memory 26.97 GB with the 8B teacher and 2B student co-resident, 33.0 s per step on average (rollout 17 to 46 s, teacher forward about 0.5 s, student forward-backward about 1.8 s), checkpoints pushed to the Hub at steps 10 and 20, and the merged student scoring 0.792 accuracy (format 0.966) on the 500-question test set versus 0.668 zero-shot, by sampling student rollouts at temperature 1.0, scoring only the generated span with `logits_to_keep`, computing the full-vocabulary KL in fp32 chunks, and updating a rank-64 LoRA.
+- Observation for the length-collapse question: mean rollout length grew from 121 to 215 tokens over 20 steps (teacher responses are longer than the student's), so the risk in this setup is lengthening toward the 512-token cap rather than collapse; EOS rate stayed at 0.75 to 1.00 per batch.
+- [pending] Full OPD runs at 300 / 900 / 3000 questions with per-step timing, final KL, rollout accuracy trend, and paired comparison against SFT.
+
 ## Metrics to capture in later stages
 
 Fill each of these with the exact number and the json file it comes from.
