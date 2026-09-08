@@ -19,8 +19,9 @@ per-token KL between the two distributions is minimized on the LoRA parameters. 
 the loss. Checkpoints (LoRA + optimizer) go to the Hub every `CKPT_EVERY` steps and the run resumes automatically after a
 disconnect: just re-run this notebook.
 
-Budget on an A100 40 GB: roughly 30 to 40 s per step at batch 8, so 500 steps is 4 to 5 hours. Colab sessions may end
-before that; the resume logic exists for exactly this reason.
+Budget on an A100 40 GB (measured in the smoke run): 33 s per step at batch 8 with rollout taking about 90% of it and
+peak memory 27 GB. Rollout is latency-bound, so the full run uses batch 16 for nearly double the throughput; 150 steps
+(2400 rollouts) take roughly 1.5 to 2 hours. Colab sessions may end before that; the resume logic exists for exactly this reason.
 Start with `SMOKE = True` (100 questions, 20 steps, checkpoint every 10) to confirm loss decreases and memory is stable."""),
 
 code("""# ==================== Config ====================
@@ -35,10 +36,10 @@ SEED  = 42
 RUN_NAME    = f"opd_{QUESTION_SOURCE}" + ("_smoke" if SMOKE else "")
 CKPT_REPO   = f"ffyang/vlm_opd_{RUN_NAME}_ckpt"
 MERGED_REPO = f"ffyang/vlm_opd_{RUN_NAME}_merged"
-TOTAL_STEPS = 20 if SMOKE else 500
-CKPT_EVERY  = 10 if SMOKE else 50
+TOTAL_STEPS = 20 if SMOKE else 150     # 150 steps x batch 16 = 2400 rollouts (same sample budget as 300 x 8)
+CKPT_EVERY  = 10 if SMOKE else 25
 LIMIT       = 100 if SMOKE else None
-BATCH_SIZE, MICRO_BATCH = 8, 4
+BATCH_SIZE, MICRO_BATCH = (8, 4) if SMOKE else (16, 4)   # rollout time is latency-bound, so batch 16 nearly doubles throughput
 LR = 5e-5
 KL_DIRECTION = "reverse"     # "forward" for the ablation
 suffix = "_smoke" if SMOKE else ""

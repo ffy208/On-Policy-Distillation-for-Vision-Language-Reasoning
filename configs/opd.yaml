@@ -4,16 +4,16 @@ teacher_model: Qwen/Qwen3-VL-8B-Instruct
 data_repo: ffyang/vlm_opd_chartqa_human
 ckpt_repo: ffyang/vlm_opd_opd_human_ckpt      # LoRA + optimizer every ckpt_every steps, latest.txt pointer
 merged_repo: ffyang/vlm_opd_opd_human_merged  # final merged weights for vLLM evaluation
-batch_size: 8               # questions per step, one rollout each
+batch_size: 16              # questions per step, one rollout each (rollout is latency-bound; 16 nearly doubles throughput vs 8)
 micro_batch: 4              # rows per teacher/student forward-backward pass (gradient accumulation inside a step)
 max_new_tokens: 512
 temperature: 1.0            # sampling, never greedy: on-policy means covering the states the student actually visits
 top_p: 1.0
 kl_direction: reverse       # reverse = KL(student || teacher); forward = KL(teacher || student)
 learning_rate: 5.0e-5
-total_steps: 500
+total_steps: 150            # 150 x 16 = 2400 rollouts per run
 warmup_steps: 20
 grad_clip: 1.0
 lora_r: 64
-ckpt_every: 50
+ckpt_every: 25
 seed: 42

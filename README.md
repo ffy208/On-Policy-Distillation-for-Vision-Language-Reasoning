@@ -26,6 +26,7 @@ Open the latest notebook directly from GitHub (Colab keeps its own copy, so reop
 - Stage 0: https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/00_setup_and_eval.ipynb
 - Stage 1: https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/01_sft.ipynb
 - Stage 2: https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/02_opd.ipynb
+- Stage 3: https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/03_data_efficiency.ipynb
 
 Known Colab environment issue: installing vLLM upgrades torch to a newer CUDA build while the preinstalled torchaudio stays on the old one, and transformers then fails to import any processor. The install cell removes torchaudio for this reason; if you see `PyTorch and TorchAudio were compiled with different CUDA versions`, run `pip uninstall -y torchaudio` and retry.
 
@@ -47,11 +48,14 @@ vlm_opd/
   sft.py            (Stage 1) LoRA SFT with the transformers Trainer, merge + push to Hub
   opd_utils.py      (Stage 2) rollout inputs, generation masks, per-token KL, vision-batch slicing (pure tensors)
   opd_trainer.py    (Stage 2) on-policy distillation loop: rollout -> teacher/student scoring -> KL -> LoRA update
+  analysis/stats.py (Stage 3) bootstrap intervals and paired bootstrap deltas on per-question correctness
+  analysis/data_efficiency.py (Stage 3) accuracy-vs-questions table, crossover point, figure, report
   analysis/         (Stage 4) token heatmaps
 notebooks/
   00_setup_and_eval.ipynb    install deps, sample data, zero-shot evaluation
   01_sft.ipynb               teacher generation -> LoRA SFT -> evaluation
   02_opd.ipynb               on-policy distillation with Hub checkpoints and automatic resume
+  03_data_efficiency.ipynb   SFT vs OPD at 300 / 900 / 3000 questions; skips finished points, resumes OPD
   build_*.py                 generate the notebooks above (edit the script, then regenerate)
 configs/            yaml configs
 docs/resume_log.md  measurable results per stage in XYZ form, with the metrics still to capture
@@ -92,6 +96,13 @@ tests/              offline unit tests
 - The loss is the exact full-vocabulary per-token KL, `reverse` = KL(student || teacher) by default (`--kl-direction forward` for the ablation), averaged over generated tokens up to and including the first `<|im_end|>`. Prompt, image, and post-EOS padding positions are masked out. The KL is computed in fp32 chunks of 64 positions; a batch is processed in micro-batches with gradient accumulation so peak memory stays bounded.
 - Every step logs per-token KL, mean and max rollout length, EOS rate, `Answer:` format rate, rollout accuracy against gold, time split into rollout / teacher forward / student forward-backward, peak GPU memory, learning rate, and gradient norm to `opd_log.jsonl`. These are the quantities the resume log needs.
 - Every `ckpt_every` steps the LoRA adapter, optimizer, scheduler, data cursor, and epoch go to the Hub with a `latest.txt` pointer; re-running the notebook resumes from there. Data order is a seeded permutation per epoch and rollout sampling is seeded per step, so a resumed run follows the same trajectory.
+
+## Stage 3 design notes
+
+- Budgets are the first 300, 900, and 3000 questions of the sampled train set; SFT and OPD see identical questions. For SFT the budget is applied to the kept teacher solutions by question index (`--max-question-index`), so the 300-question point trains on about 240 solutions.
+- Update counts are held fixed across budgets so that data quantity is the only variable: SFT runs 302 optimizer steps at every budget (2 epochs at 3000, more epochs at smaller budgets); OPD runs 150 steps of batch 16 (2400 rollouts) at every budget. Rollout time is latency-bound, which is why batch 16 replaced the batch 8 / 300-step plan after the smoke run.
+- All six models are scored on the same 500-question test set. Each point carries a percentile bootstrap interval; OPD minus SFT at each budget uses a paired bootstrap over questions, which is much tighter than comparing two independent intervals. The reported data-efficiency claim is the smallest OPD budget whose interval reaches the full-data SFT accuracy.
+- The notebook is restart-safe: finished points are detected from the Hub results repo and skipped, and an interrupted OPD run resumes from its latest checkpoint.
 
 ## Verified external assumptions (2026-09-07)
 
@@ -139,6 +150,6 @@ Student-teacher gap: 17.6 points. Evaluation of 500 rows takes 12 s (2B) and 36 
 - [x] Stage 0: repository layout, `common.py`, `hub_utils.py`, `prepare.py`, `evaluate.py`, `00_setup_and_eval.ipynb`
 - [x] Stage 1: SFT baseline 0.834 (teacher 0.844, zero-shot 0.668); 80.1% teacher acceptance over 3000 questions
 - [x] Stage 2 code smoke-tested on the A100: 33 s/step at batch 8, peak 27 GB, KL 0.42 -> 0.26 in 20 steps, OPD smoke student 0.792
-- [ ] Stage 3: data-efficiency curve
+- [x] Stage 3 code: `analysis/stats.py`, `analysis/data_efficiency.py`, `03_data_efficiency.ipynb` (Colab runs pending)
 - [ ] Stage 4: token-level feedback visualization
 - [ ] Stage 5 (optional): self-distillation (SDPO)

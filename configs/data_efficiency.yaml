@@ -1,0 +1,25 @@
+# Stage 3: data-efficiency curve (accuracy vs number of training questions)
+budgets: [300, 900, 3000]      # the first N questions of the sampled train set; both methods see identical questions
+sft:
+  data_repo: ffyang/vlm_opd_sft_human   # kept teacher solutions, filtered by --max-question-index
+  max_steps: 302                        # same number of optimizer steps at every budget (= 2 epochs at 3000)
+  learning_rate: 1.0e-4
+  effective_batch: 16
+  merged_repo_pattern: ffyang/vlm_opd_sft_human_q{budget}_merged
+opd:
+  data_repo: ffyang/vlm_opd_chartqa_human
+  total_steps: 150                      # same number of steps at every budget
+  batch_size: 16
+  micro_batch: 4
+  learning_rate: 5.0e-5
+  kl_direction: reverse
+  ckpt_every: 25
+  ckpt_repo_pattern: ffyang/vlm_opd_opd_human_q{budget}_ckpt
+  merged_repo_pattern: ffyang/vlm_opd_opd_human_q{budget}_merged
+evaluation:
+  test_repo: ffyang/vlm_opd_chartqa_human
+  result_repo: ffyang/vlm_opd_results
+  result_pattern: outputs/eval_{method}_q{budget}.json
+  reuse:
+    sft_q3000: outputs/eval_sft_student.json   # the Stage 1 full run is the 3000-question SFT point
+seed: 42
