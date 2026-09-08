@@ -24,6 +24,22 @@ from .common import DEFAULT_SEED, STUDENT_MODEL, get_hf_token, image_pixel_bound
 logger = logging.getLogger(__name__)
 
 
+def question_index(row_id: str) -> int:
+    """Position of a question in the sampled train set, parsed from ids like `train_00042`."""
+    return int(str(row_id).rsplit("_", 1)[-1])
+
+
+def limit_questions(dataset, max_question_index: int | None):
+    """Keep only rows whose question index is below `max_question_index` (a data budget in questions).
+
+    The SFT dataset holds one kept teacher solution per question, in train-set order, so a budget of N
+    questions is the subset with index < N, not the first N rows.
+    """
+    if max_question_index is None:
+        return dataset
+    return dataset.filter(lambda r: question_index(r["id"]) < max_question_index, desc=f"Questions < {max_question_index}")
+
+
 def build_training_args(
     out_dir: str | Path,
     epochs: float = 2.0,
@@ -181,14 +197,18 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--max-steps", type=int, default=-1, help="Stop after N optimizer steps (smoke test)")
     parser.add_argument("--limit", type=int, default=None, help="Use only the first N training rows")
+    parser.add_argument("--max-question-index", type=int, default=None,
+                        help="Data budget in questions: keep rows whose question index is below N")
     parser.add_argument("--push-adapter-repo", type=str, default=None)
     parser.add_argument("--push-merged-repo", type=str, default=None, help="Also merge LoRA into the base and push")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     ds = load_hub_dataset(args.data_repo, args.split)
+    ds = limit_questions(ds, args.max_question_index)
     if args.limit:
         ds = ds.select(range(min(args.limit, len(ds))))
+    logger.info("Training rows: %d", len(ds))
     train_sft(
         ds, args.out_dir, args.model, args.epochs, args.lr, args.batch, args.grad_accum,
         args.lora_r, args.max_length, seed=args.seed, max_steps=args.max_steps,

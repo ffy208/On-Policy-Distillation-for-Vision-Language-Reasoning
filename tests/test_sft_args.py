@@ -21,3 +21,15 @@ def test_build_training_args_cpu(tmp_path):
     # warmup expressed as a ratio on either API generation
     ratio = getattr(args, "warmup_ratio", None)
     assert (ratio == 0.03) or (args.warmup_steps == 0.03)
+
+
+def test_limit_questions_filters_by_question_index():
+    from datasets import Dataset
+
+    from vlm_opd.sft import limit_questions, question_index
+
+    ds = Dataset.from_dict({"id": ["train_00000", "train_00002", "train_00005", "train_00300"], "x": [1, 2, 3, 4]})
+    assert question_index("train_00300") == 300
+    assert limit_questions(ds, 300)["id"] == ["train_00000", "train_00002", "train_00005"]
+    assert limit_questions(ds, 3)["id"] == ["train_00000", "train_00002"]
+    assert len(limit_questions(ds, None)) == 4
