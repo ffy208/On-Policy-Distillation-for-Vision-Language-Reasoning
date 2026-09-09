@@ -3,7 +3,7 @@
 # `module avail` shows on your cluster. Installs into a uv virtualenv under $HOME.
 set -euo pipefail
 
-REPO_DIR="${REPO_DIR:-$HOME/On-Policy-Distillation-for-Vision-Language-Reasoning}"
+REPO_DIR="${REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"   # the repo this script lives in
 ENV_DIR="${ENV_DIR:-$HOME/vlm_opd_env}"
 export HF_HOME="${HF_HOME:-${SCRATCH:-$HOME/scratch}/hf_cache}"   # models and datasets go to scratch, not home quota
 

@@ -7,7 +7,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --gres=gpu:A100:1
+#SBATCH --gres=gpu:A100:1        # on PACE ICE check `sinfo -o "%P %G"`; H100 nodes also work (80 GB fits the 32B teacher)
 #SBATCH -t 04:00:00
 #SBATCH -o logs/%x-%j.out
 ##SBATCH -A <your-account>      # uncomment and fill if your allocation requires it
@@ -15,7 +15,7 @@
 set -euo pipefail
 
 : "${TASK:?set TASK}"; : "${METHOD:?set METHOD}"; : "${BUDGET:?set BUDGET}"; : "${SEED:=42}"
-REPO_DIR="${REPO_DIR:-$HOME/On-Policy-Distillation-for-Vision-Language-Reasoning}"
+REPO_DIR="${REPO_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"   # submit from the repository root
 ENV_DIR="${ENV_DIR:-$HOME/vlm_opd_env}"
 export HF_HOME="${HF_HOME:-${SCRATCH:-$HOME/scratch}/hf_cache}"
 export HF_TOKEN="$(cat "$HOME/.hf_token")"

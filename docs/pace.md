@@ -10,12 +10,14 @@ from its latest Hub checkpoint.
 ```bash
 git clone https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning.git
 cd On-Policy-Distillation-for-Vision-Language-Reasoning
-bash slurm/setup_env.sh                 # uv venv + vllm/transformers/peft; HF_HOME on scratch
+bash slurm/setup_env.sh                 # uv venv + vllm/transformers/peft; HF_HOME on scratch (works from any clone location)
 echo 'hf_...' > ~/.hf_token && chmod 600 ~/.hf_token
 ```
 
-Check the module names (`module avail python cuda`), the A100 partition and account flags
-(`pace-check-queue`, `pace-quota`), and edit the two commented `#SBATCH` lines in `slurm/point.sbatch`.
+Check the module names (`module avail python cuda`), the GPU partition and GRES names
+(`sinfo -o "%P %G"`; on PACE ICE the GPU partition is typically `ice-gpu`), and edit the commented
+`#SBATCH` lines in `slurm/point.sbatch`. Always `sbatch` from the repository root: the job uses
+`SLURM_SUBMIT_DIR` to find the code.
 
 ## Smoke test (about 15 minutes on one A100)
 
