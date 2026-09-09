@@ -39,6 +39,10 @@ Qwen3-VL-8B-Instruct. Task: ChartQA, human-written questions, 3000 train / 500 t
 - Accomplished a statistically significant low-data win for OPD over supervised distillation, as measured by a paired-bootstrap difference of +5.8 points [+2.8, +8.8] at 300 questions (OPD 0.836 vs SFT 0.778, same questions, same number of optimizer updates), by holding update counts fixed across methods so data quantity is the only variable.
 - Documented the saturation regime honestly: at 900 questions the paired difference is +1.2 [-1.6, +4.0] and at 3000 questions -1.0 [-3.6, +1.6], both within noise, because both methods converge to the teacher ceiling of 0.844 with a 500-question test set. Caveats recorded: single seed; the 3000-question OPD run covers each question less than once (2400 rollouts), so it is undertrained relative to SFT's 2 epochs.
 
+### Stage 4 (code complete 2026-09-08, Colab run pending)
+
+- [pending] Share of teacher KL mass by token class (chart_value / arithmetic / text / answer) and the concentration ratio per class for the zero-shot student on 100 test questions; the same for the OPD-300 student; number of tokens analyzed.
+
 ## Metrics to capture in later stages
 
 Fill each of these with the exact number and the json file it comes from.

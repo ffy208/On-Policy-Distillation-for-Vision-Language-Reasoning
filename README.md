@@ -27,6 +27,7 @@ Open the latest notebook directly from GitHub (Colab keeps its own copy, so reop
 - Stage 1: https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/01_sft.ipynb
 - Stage 2: https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/02_opd.ipynb
 - Stage 3: https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/03_data_efficiency.ipynb
+- Stage 4: https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/04_token_feedback.ipynb
 
 Known Colab environment issue: installing vLLM upgrades torch to a newer CUDA build while the preinstalled torchaudio stays on the old one, and transformers then fails to import any processor. The install cell removes torchaudio for this reason; if you see `PyTorch and TorchAudio were compiled with different CUDA versions`, run `pip uninstall -y torchaudio` and retry.
 
@@ -50,12 +51,15 @@ vlm_opd/
   opd_trainer.py    (Stage 2) on-policy distillation loop: rollout -> teacher/student scoring -> KL -> LoRA update
   analysis/stats.py (Stage 3) bootstrap intervals and paired bootstrap deltas on per-question correctness
   analysis/data_efficiency.py (Stage 3) accuracy-vs-questions table, crossover point, figure, report
-  analysis/         (Stage 4) token heatmaps
+  analysis/token_feedback.py (Stage 4) student rollouts scored by both models: per-token reverse KL and log-ratio
+  analysis/token_classes.py  (Stage 4) token roles (chart_value / arithmetic / text / answer) and per-class aggregation
+  analysis/heatmap.py        (Stage 4) token heatmap and per-class bar chart rendering
 notebooks/
   00_setup_and_eval.ipynb    install deps, sample data, zero-shot evaluation
   01_sft.ipynb               teacher generation -> LoRA SFT -> evaluation
   02_opd.ipynb               on-policy distillation with Hub checkpoints and automatic resume
   03_data_efficiency.ipynb   SFT vs OPD at 300 / 900 / 3000 questions; skips finished points, resumes OPD
+  04_token_feedback.ipynb    where teacher feedback lands, before and after OPD
   build_*.py                 generate the notebooks above (edit the script, then regenerate)
 configs/            yaml configs
 docs/resume_log.md  measurable results per stage in XYZ form, with the metrics still to capture
@@ -103,6 +107,13 @@ tests/              offline unit tests
 - Update counts are held fixed across budgets so that data quantity is the only variable: SFT runs 302 optimizer steps at every budget (2 epochs at 3000, more epochs at smaller budgets); OPD runs 150 steps of batch 16 (2400 rollouts) at every budget. Rollout time is latency-bound, which is why batch 16 replaced the batch 8 / 300-step plan after the smoke run.
 - All six models are scored on the same 500-question test set. Each point carries a percentile bootstrap interval; OPD minus SFT at each budget uses a paired bootstrap over questions, which is much tighter than comparing two independent intervals. The reported data-efficiency claim is the smallest OPD budget whose interval reaches the full-data SFT accuracy.
 - The notebook is restart-safe: finished points are detected from the Hub results repo and skipped, and an interrupted OPD run resumes from its latest checkpoint.
+
+## Stage 4 design notes
+
+- The student samples one solution per test question at temperature 1.0, the same regime as OPD training, so the feedback is measured on states the student actually visits. Teacher and student score the identical sequence; per token we record the full-vocabulary reverse KL (the OPD training signal) and the sampled-token log-ratio log p_student - log p_teacher (positive where the student is over-confident relative to the teacher).
+- Token roles are heuristic and documented in `analysis/token_classes.py`: the final `Answer:` line is `answer`; digit and operator tokens on lines with an arithmetic cue (an operator or a word such as sum, average, difference) are `arithmetic`; digit tokens on other lines are `chart_value` (values read off the chart); everything else is `text`. Operands and results on arithmetic lines are not separated.
+- The statistic reported per class is concentration = share of total KL mass / share of tokens. A class above 1 receives more teacher feedback than its length alone would predict.
+- The same analysis is run on the OPD-300 student to show what feedback remains after training; heatmaps for the same questions use the same colour scale.
 
 ## Verified external assumptions (2026-09-07)
 
@@ -163,5 +174,5 @@ Student-teacher gap: 17.6 points. Evaluation of 500 rows takes 12 s (2B) and 36 
 - [x] Stage 1: SFT baseline 0.834 (teacher 0.844, zero-shot 0.668); 80.1% teacher acceptance over 3000 questions
 - [x] Stage 2 code smoke-tested on the A100: 33 s/step at batch 8, peak 27 GB, KL 0.42 -> 0.26 in 20 steps, OPD smoke student 0.792
 - [x] Stage 3: OPD matches full-data SFT with 10% of the questions (+5.8 points over SFT at 300 questions, paired CI excludes 0)
-- [ ] Stage 4: token-level feedback visualization
+- [x] Stage 4 code: `analysis/token_feedback.py`, `analysis/token_classes.py`, `analysis/heatmap.py`, `04_token_feedback.ipynb` (Colab run pending)
 - [ ] Stage 5 (optional): self-distillation (SDPO)
