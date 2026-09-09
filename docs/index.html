@@ -6,338 +6,530 @@
 <title>On-Policy Distillation for Vision-Language Reasoning</title>
 <meta name="description" content="On-policy distillation transferred to a vision-language model: a 2B student matches full-data supervised distillation with 10% of the questions, and a token-level analysis of where the teacher's feedback lands.">
 <meta property="og:title" content="On-Policy Distillation for Vision-Language Reasoning">
-<meta property="og:description" content="OPD with 300 ChartQA questions matches SFT on 3000. Where does the teacher's token-level feedback land?">
+<meta property="og:description" content="OPD with 300 ChartQA questions matches SFT on 3,000. Where does the teacher's token-level feedback land?">
 <meta property="og:image" content="https://ffy208.github.io/On-Policy-Distillation-for-Vision-Language-Reasoning/assets/data_efficiency.png">
+<meta name="theme-color" content="#0e1014">
+<script>document.documentElement.classList.add("js");</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..700,0..100&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Schibsted+Grotesk:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --paper: #f4efe6;
-    --paper-deep: #ebe4d6;
-    --ink: #17151a;
-    --ink-soft: #3d3a40;
-    --muted: #6f6960;
-    --rule: #d6cdbd;
-    --accent: #9b2226;
-    --accent-soft: #f3d9d5;
-    --sft: #1f77b4;
-    --opd: #e0731a;
-    --teacher: #17151a;
-    --serif: "Fraunces", "Iowan Old Style", Georgia, serif;
-    --sans: "IBM Plex Sans", "Helvetica Neue", Helvetica, sans-serif;
-    --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
-    --measure: 68ch;
+    --bg: #0e1014;
+    --bg-2: #14171d;
+    --bg-3: #1b1f27;
+    --line: #262b35;
+    --line-2: #343a47;
+    --fg: #ece6da;
+    --fg-2: #b8b2a6;
+    --fg-3: #7c7a74;
+    --opd: #ff8a3d;
+    --opd-dim: rgba(255,138,61,.18);
+    --sft: #5aa9e6;
+    --sft-dim: rgba(90,169,230,.18);
+    --teach: #ece6da;
+    --base: #8a8478;
+    --good: #7ad39a;
+    --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+    --sans: "Schibsted Grotesk", "Helvetica Neue", Helvetica, sans-serif;
+    --mono: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body {
-    margin: 0;
-    background: var(--paper);
-    color: var(--ink);
-    font-family: var(--sans);
-    font-size: 17px;
-    line-height: 1.6;
-    -webkit-font-smoothing: antialiased;
-    position: relative;
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: var(--sans); font-size: 17px; line-height: 1.62;
+    -webkit-font-smoothing: antialiased; overflow-x: hidden;
   }
-  body::before {
-    content: "";
-    position: fixed; inset: 0; pointer-events: none; z-index: 0;
-    opacity: .55;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 5; opacity: .35; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
   }
-  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
-  a:hover { text-decoration-thickness: 2px; }
-  .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 24px 96px; }
+  a { color: var(--fg); text-decoration: underline; text-decoration-color: var(--fg-3); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  a:hover { text-decoration-color: var(--opd); }
+  ::selection { background: var(--opd); color: #0e1014; }
+
+  /* ---------- top bar ---------- */
+  .top {
+    position: sticky; top: 0; z-index: 10; backdrop-filter: blur(10px); background: rgba(14,16,20,.72);
+    border-bottom: 1px solid var(--line);
+  }
+  .top-in { max-width: 1240px; margin: 0 auto; padding: 12px 28px; display: flex; align-items: center; gap: 24px; font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-2); }
+  .top-in .brand { color: var(--fg); font-weight: 600; letter-spacing: .12em; }
+  .top-in nav { display: flex; gap: 18px; margin-left: auto; }
+  .top-in nav a { text-decoration: none; color: var(--fg-2); }
+  .top-in nav a:hover { color: var(--opd); }
+  @media (max-width: 760px) { .top-in nav { display: none; } }
+
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 28px; }
 
   /* ---------- hero ---------- */
-  header.hero { padding: 72px 0 40px; border-bottom: 2px solid var(--ink); }
-  .eyebrow {
-    font-family: var(--mono); font-size: 12.5px; letter-spacing: .14em; text-transform: uppercase;
-    color: var(--accent); margin: 0 0 18px;
+  .hero {
+    position: relative; padding: 96px 0 72px; overflow: hidden;
+    background:
+      radial-gradient(1200px 600px at 78% -10%, rgba(255,138,61,.14), transparent 60%),
+      radial-gradient(900px 500px at 10% 110%, rgba(90,169,230,.10), transparent 60%);
   }
+  .hero::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 56px 56px; opacity: .35;
+    -webkit-mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 75%); mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 75%);
+  }
+  .hero .wrap { position: relative; display: grid; grid-template-columns: 1.15fr .85fr; gap: 56px; align-items: end; }
+  .kicker { font-family: var(--mono); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--opd); margin: 0 0 22px; }
   h1 {
-    font-family: var(--serif); font-weight: 400; font-variation-settings: "opsz" 144, "SOFT" 30;
-    font-size: clamp(40px, 6.2vw, 76px); line-height: 1.02; letter-spacing: -.015em; margin: 0 0 22px; max-width: 16ch;
+    font-family: var(--serif); font-weight: 400; font-size: clamp(46px, 7vw, 92px); line-height: .98; letter-spacing: -.01em; margin: 0 0 26px; max-width: 12ch;
   }
-  h1 em { font-style: italic; color: var(--accent); }
-  .lede { font-size: clamp(18px, 2vw, 21px); line-height: 1.5; max-width: 60ch; color: var(--ink-soft); margin: 0 0 28px; }
-  .meta { display: flex; flex-wrap: wrap; gap: 10px 22px; font-family: var(--mono); font-size: 13px; color: var(--muted); }
-  .meta a { color: var(--ink); }
+  h1 em { font-style: italic; color: var(--opd); }
+  .lede { font-size: clamp(17px, 1.6vw, 20px); color: var(--fg-2); max-width: 58ch; margin: 0 0 30px; }
+  .lede b { color: var(--fg); font-weight: 600; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font-family: var(--mono); font-size: 12.5px; color: var(--fg-3); }
+  .meta a { color: var(--fg-2); }
 
-  .stats {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 40px 0 0;
-    border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
-  }
-  .stat { padding: 22px 18px 20px; border-right: 1px solid var(--rule); position: relative; transition: background .25s; }
-  .stat:last-child { border-right: 0; }
-  .stat:hover { background: var(--paper-deep); }
-  .stat .n { font-family: var(--mono); font-weight: 500; font-size: clamp(30px, 3.6vw, 44px); line-height: 1; letter-spacing: -.02em; }
-  .stat .l { font-size: 13px; color: var(--muted); margin-top: 8px; line-height: 1.35; }
-  .stat.opd .n { color: var(--opd); }
-  .stat.sft .n { color: var(--sft); }
-  .stat.teacher .n { color: var(--teacher); }
-  .stat .ci { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+  /* accuracy scale (hero visual) */
+  .scale { background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 26px 26px 22px; box-shadow: 0 30px 80px rgba(0,0,0,.45); }
+  .scale .t { font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-3); margin: 0 0 18px; display: flex; justify-content: space-between; }
+  .scale svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .scale .foot { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 18px; }
+  .scale .foot div { border-top: 1px solid var(--line-2); padding-top: 10px; }
+  .scale .foot .v { font-family: var(--mono); font-size: 22px; font-weight: 600; line-height: 1; }
+  .scale .foot .k { font-size: 12px; color: var(--fg-3); margin-top: 6px; line-height: 1.3; }
+  .c-opd { color: var(--opd); } .c-sft { color: var(--sft); } .c-base { color: var(--base); } .c-teach { color: var(--teach); }
 
-  /* ---------- sections with marginalia ---------- */
-  section { display: grid; grid-template-columns: 200px 1fr; gap: 0 48px; padding: 56px 0 8px; border-bottom: 1px solid var(--rule); }
-  section > aside {
-    font-family: var(--mono); font-size: 12.5px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase;
-    padding-top: 12px; position: sticky; top: 24px; align-self: start;
-  }
-  section > aside .num { display: block; font-family: var(--serif); font-size: 44px; line-height: 1; color: var(--accent); letter-spacing: 0; text-transform: none; margin-bottom: 8px; font-variation-settings: "opsz" 144; }
-  section > div { min-width: 0; }
-  h2 { font-family: var(--serif); font-weight: 500; font-size: clamp(26px, 3vw, 36px); line-height: 1.15; margin: 0 0 18px; letter-spacing: -.01em; font-variation-settings: "opsz" 72; }
-  h3 { font-family: var(--serif); font-weight: 500; font-size: 21px; margin: 32px 0 10px; }
-  p { max-width: var(--measure); margin: 0 0 16px; }
-  ul, ol { max-width: var(--measure); padding-left: 22px; margin: 0 0 16px; }
-  li { margin-bottom: 8px; }
-  strong { font-weight: 600; }
-  code, .mono { font-family: var(--mono); font-size: .92em; }
-  code { background: var(--paper-deep); padding: 1px 5px; border-radius: 3px; }
-  pre { background: var(--ink); color: #efe9dd; padding: 18px 20px; border-radius: 4px; overflow-x: auto; font-family: var(--mono); font-size: 13.5px; line-height: 1.55; max-width: 100%; }
-  pre code { background: transparent; padding: 0; color: inherit; }
-  .callout { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 14px 18px; margin: 20px 0 24px; max-width: var(--measure); }
-  .callout p:last-child { margin-bottom: 0; }
+  /* ---------- sections ---------- */
+  section { padding: 96px 0 0; }
+  .sec-head { display: grid; grid-template-columns: 180px 1fr; gap: 32px; align-items: baseline; margin-bottom: 28px; }
+  .sec-num { font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--opd); }
+  .sec-num b { display: block; font-family: var(--serif); font-size: 40px; font-weight: 400; color: var(--fg); letter-spacing: 0; text-transform: none; line-height: 1; margin-bottom: 6px; }
+  h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(30px, 3.6vw, 46px); line-height: 1.08; margin: 0; letter-spacing: -.005em; max-width: 24ch; }
+  .body { display: grid; grid-template-columns: 180px 1fr; gap: 32px; }
+  .body > .side { font-size: 13px; color: var(--fg-3); line-height: 1.5; }
+  .body > .main { min-width: 0; }
+  p { max-width: 66ch; margin: 0 0 16px; color: var(--fg-2); }
+  p strong, li strong { color: var(--fg); font-weight: 600; }
+  ul { max-width: 66ch; padding-left: 20px; margin: 0 0 16px; color: var(--fg-2); }
+  li { margin-bottom: 9px; }
+  code { font-family: var(--mono); font-size: .9em; background: var(--bg-3); padding: 1px 6px; border-radius: 4px; color: var(--fg); }
+  .note { border: 1px solid var(--line-2); border-left: 3px solid var(--opd); border-radius: 6px; padding: 14px 18px; max-width: 66ch; margin: 20px 0 24px; background: var(--bg-2); }
+  .note p { margin: 0; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 
-  /* ---------- tables ---------- */
-  .tbl { overflow-x: auto; margin: 18px 0 26px; }
-  table { border-collapse: collapse; width: 100%; font-size: 15px; }
-  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
-  th { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--ink); }
-  td.num, th.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  td .ci { color: var(--muted); font-size: 12.5px; }
-  tr.hl td { background: var(--paper-deep); }
-  .pos { color: #1e6e3a; font-weight: 600; }
-  .neu { color: var(--muted); }
-  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  /* cards */
+  .card { background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 22px 22px 18px; }
+  .card h4 { margin: 0 0 8px; font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-3); font-weight: 500; }
+  .card .big { font-family: var(--mono); font-size: clamp(30px, 3.4vw, 42px); font-weight: 600; line-height: 1; letter-spacing: -.02em; }
+  .card .sub { color: var(--fg-2); font-size: 14px; margin-top: 8px; }
+  .cards-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 26px 0 30px; }
 
-  /* ---------- figures ---------- */
-  figure { margin: 24px 0 30px; }
-  figure.full { grid-column: 1 / -1; }
-  figure img { width: 100%; height: auto; display: block; border: 1px solid var(--rule); background: #fff; }
-  figcaption { font-size: 13.5px; color: var(--muted); margin-top: 10px; max-width: var(--measure); line-height: 1.5; }
-  .fig-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-  .fig-pair figure { margin: 8px 0 12px; }
+  /* charts */
+  .chart { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 22px 22px 16px; margin: 26px 0 18px; position: relative; }
+  .chart .ct { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .chart .ct h3 { margin: 0; font-family: var(--sans); font-weight: 600; font-size: 15px; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-family: var(--mono); font-size: 11.5px; color: var(--fg-2); }
+  .legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+  .chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .chart .axis text { font-family: var(--mono); font-size: 11px; fill: var(--fg-3); }
+  .chart .axis line, .chart .axis path { stroke: var(--line-2); }
+  .chart .grid line { stroke: var(--line); }
+  .chart .lbl { font-family: var(--mono); font-size: 11.5px; fill: var(--fg-2); }
+  .tip { position: absolute; pointer-events: none; background: #0b0d11; border: 1px solid var(--line-2); color: var(--fg); font-family: var(--mono); font-size: 12px; padding: 8px 10px; border-radius: 6px; transform: translate(-50%, -115%); white-space: nowrap; opacity: 0; transition: opacity .15s; }
+  .chart:hover .tip.on { opacity: 1; }
+  .seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 999px; overflow: hidden; font-family: var(--mono); font-size: 12px; }
+  .seg button { background: transparent; color: var(--fg-2); border: 0; padding: 6px 14px; cursor: pointer; font: inherit; }
+  .seg button.on { background: var(--fg); color: var(--bg); }
+  .caption { font-size: 13.5px; color: var(--fg-3); max-width: 66ch; line-height: 1.5; margin: 0 0 8px; }
 
-  /* ---------- misc ---------- */
-  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 22px; }
-  .pill { font-family: var(--mono); font-size: 12px; border: 1px solid var(--ink); padding: 4px 10px; border-radius: 999px; }
-  .links a.btn { display: inline-block; font-family: var(--mono); font-size: 13px; padding: 9px 14px; border: 1.5px solid var(--ink); color: var(--ink); text-decoration: none; margin: 0 10px 10px 0; transition: background .2s, color .2s; }
-  .links a.btn:hover { background: var(--ink); color: var(--paper); }
-  .links a.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .links a.btn.primary:hover { background: #7a181c; border-color: #7a181c; }
-  footer { padding: 40px 0 0; font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
-  footer a { color: var(--ink); }
+  /* tables */
+  .tbl { overflow-x: auto; margin: 18px 0 8px; border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  th { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-3); font-weight: 500; background: var(--bg-2); }
+  td.n, th.n { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td .ci { color: var(--fg-3); font-size: 12px; }
+  tr.hl td { background: rgba(255,138,61,.06); }
+  .pos { color: var(--good); font-weight: 600; } .neu { color: var(--fg-3); }
 
-  /* ---------- motion ---------- */
-  @media (prefers-reduced-motion: no-preference) {
-    .reveal { opacity: 0; transform: translateY(14px); animation: rise .7s cubic-bezier(.2,.7,.2,1) forwards; }
-    .reveal:nth-child(1) { animation-delay: .05s } .reveal:nth-child(2) { animation-delay: .15s }
-    .reveal:nth-child(3) { animation-delay: .25s } .reveal:nth-child(4) { animation-delay: .35s }
-    .reveal:nth-child(5) { animation-delay: .45s }
-    .stats .stat { opacity: 0; animation: rise .6s cubic-bezier(.2,.7,.2,1) forwards; }
-    .stats .stat:nth-child(1) { animation-delay: .5s } .stats .stat:nth-child(2) { animation-delay: .6s }
-    .stats .stat:nth-child(3) { animation-delay: .7s } .stats .stat:nth-child(4) { animation-delay: .8s }
-    @keyframes rise { to { opacity: 1; transform: none; } }
-  }
+  figure { margin: 22px 0 26px; }
+  figure img { width: 100%; height: auto; display: block; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+  figcaption { font-size: 13.5px; color: var(--fg-3); margin-top: 10px; max-width: 66ch; line-height: 1.5; }
 
-  @media (max-width: 860px) {
-    body { font-size: 16px; }
-    section { grid-template-columns: 1fr; gap: 6px; padding-top: 40px; }
-    section > aside { position: static; display: flex; align-items: baseline; gap: 12px; }
-    section > aside .num { font-size: 30px; margin: 0; }
-    .stats { grid-template-columns: repeat(2, 1fr); }
-    .stat:nth-child(2) { border-right: 0; } .stat:nth-child(1), .stat:nth-child(2) { border-bottom: 1px solid var(--rule); }
-    .fig-pair { grid-template-columns: 1fr; }
-    header.hero { padding-top: 48px; }
+  .btns { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 22px; }
+  .btn { font-family: var(--mono); font-size: 12.5px; padding: 10px 14px; border: 1px solid var(--line-2); border-radius: 6px; color: var(--fg); text-decoration: none; background: var(--bg-2); transition: border-color .2s, transform .2s; }
+  .btn:hover { border-color: var(--opd); transform: translateY(-1px); }
+  .btn.primary { background: var(--opd); border-color: var(--opd); color: #0e1014; font-weight: 600; }
+  pre { background: #0b0d11; border: 1px solid var(--line); color: var(--fg); padding: 16px 18px; border-radius: 8px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; max-width: 100%; }
+  pre code { background: transparent; padding: 0; }
+
+  footer { margin-top: 110px; border-top: 1px solid var(--line); padding: 34px 0 60px; font-size: 13.5px; color: var(--fg-3); display: flex; flex-wrap: wrap; gap: 10px 28px; justify-content: space-between; }
+  footer a { color: var(--fg-2); }
+
+  /* reveal on scroll */
+  .js .rv { opacity: 0; transform: translateY(18px); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+  .js .rv.in { opacity: 1; transform: none; }
+  .hero .rv:nth-child(1) { transition-delay: .05s } .hero .rv:nth-child(2) { transition-delay: .15s } .hero .rv:nth-child(3) { transition-delay: .25s } .hero .rv:nth-child(4) { transition-delay: .35s }
+  @media (prefers-reduced-motion: reduce) { .rv { opacity: 1; transform: none; transition: none; } }
+
+  @media (max-width: 960px) {
+    .hero .wrap { grid-template-columns: 1fr; gap: 36px; }
+    .sec-head, .body { grid-template-columns: 1fr; gap: 10px; }
+    .cards-3 { grid-template-columns: 1fr; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .scale .foot { grid-template-columns: repeat(2, 1fr); }
+    section { padding-top: 72px; }
+    .hero { padding: 64px 0 56px; }
   }
 </style>
 </head>
 <body>
-<div class="page">
+
+<div class="top"><div class="top-in">
+  <span class="brand">VLM · OPD</span>
+  <span>Frank Yang · 2026</span>
+  <nav><a href="#why">Why</a><a href="#f1">Data efficiency</a><a href="#f3">Token feedback</a><a href="#vlm">Engineering</a><a href="#repro">Reproduce</a><a href="https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning">GitHub ↗</a></nav>
+</div></div>
 
 <header class="hero">
-  <p class="eyebrow reveal">Independent research project · Sept 2026</p>
-  <h1 class="reveal">On-policy distillation for <em>vision-language</em> reasoning</h1>
-  <p class="lede reveal">A 2B vision-language model trained with on-policy distillation on 300 chart questions matches supervised distillation trained on 3,000, and a token-level analysis shows the teacher's feedback lands on answers and format before it lands on what the model reads off the chart.</p>
-  <div class="meta reveal">
-    <span>Frank Yang · Georgia Tech</span>
-    <a href="https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning">Code</a>
-    <a href="https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/docs/resume_log.md">Measurement log</a>
-    <span>Qwen3-VL 2B student · Qwen3-VL 8B teacher · ChartQA · one A100 40 GB</span>
-  </div>
-  <div class="stats">
-    <div class="stat"><div class="n">0.668</div><div class="l">Student, zero-shot</div><div class="ci">[0.626, 0.710]</div></div>
-    <div class="stat sft"><div class="n">0.834</div><div class="l">Supervised distillation, 3,000 questions</div><div class="ci">[0.802, 0.866]</div></div>
-    <div class="stat opd"><div class="n">0.836</div><div class="l">On-policy distillation, 300 questions</div><div class="ci">[0.804, 0.868]</div></div>
-    <div class="stat teacher"><div class="n">0.844</div><div class="l">Teacher, zero-shot</div><div class="ci">[0.812, 0.876]</div></div>
+  <div class="wrap">
+    <div>
+      <p class="kicker rv">Independent research project · on-policy distillation · Qwen3-VL</p>
+      <h1 class="rv">Teach a small <em>vision-language</em> model on its own mistakes</h1>
+      <p class="lede rv">On-policy distillation lets a 2B student learn from an 8B teacher on the states the student actually visits. On ChartQA, <b>300 questions of OPD match supervised distillation on 3,000</b>, and a token-level analysis shows the teacher's feedback lands on answers and format long before it lands on what the model reads off the chart.</p>
+      <div class="meta rv">
+        <a href="https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning">Code</a>
+        <a href="https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/docs/resume_log.md">Measurement log</a>
+        <span>Georgia Tech · Sept 2026</span>
+        <span>One Colab A100 40 GB</span>
+      </div>
+    </div>
+    <div class="scale rv">
+      <p class="t"><span>Relaxed accuracy · 500 held-out questions</span><span>95% CI</span></p>
+      <svg id="scaleSvg" viewBox="0 0 520 150" aria-label="Accuracy scale from 0.64 to 0.88 showing student zero-shot 0.668, SFT on 3000 questions 0.834, OPD on 300 questions 0.836 and teacher 0.844"></svg>
+      <div class="foot">
+        <div><div class="v c-base">0.668</div><div class="k">Student<br>zero-shot</div></div>
+        <div><div class="v c-sft">0.834</div><div class="k">SFT<br>3,000 questions</div></div>
+        <div><div class="v c-opd">0.836</div><div class="k">OPD<br>300 questions</div></div>
+        <div><div class="v c-teach">0.844</div><div class="k">Teacher<br>zero-shot</div></div>
+      </div>
+    </div>
   </div>
 </header>
 
+<main class="wrap">
+
 <section id="why">
-  <aside><span class="num">01</span>Motivation</aside>
-  <div>
-    <h2>Supervised distillation is behavior cloning, and behavior cloning compounds its errors</h2>
-    <p>Fine-tuning a student on teacher outputs only ever shows it the states the teacher visited. At inference the student drifts, enters states it never trained on, and its mistakes compound: regret grows quadratically in the sequence length, O(T²ε). Long chain-of-thought reasoning has a large T, so this is exactly where the problem bites.</p>
-    <p>DAgger's fix is to let the student act, then ask the expert what it should have done in the states the student actually reached, which brings regret down to O(Tε). A teacher language model can be queried this way for free: the student samples a solution, the teacher scores every generated token, and training minimizes the per-token KL between the two. That is on-policy distillation (OPD).</p>
-    <p>OPD only touches the distribution over text tokens. For a vision-language model the image is just part of the prefix, so the method should transfer directly. This project checks whether it does, whether the data-efficiency claim survives, and, since the prefix now contains a chart, where the teacher's token-level feedback actually lands.</p>
+  <div class="sec-head rv"><div class="sec-num"><b>01</b>Motivation</div><h2>Supervised distillation is behavior cloning, and behavior cloning compounds its errors</h2></div>
+  <div class="body rv">
+    <div class="side">DAgger (Ross et al., 2011) → GKD / OPD (Agarwal et al., 2024) → this project</div>
+    <div class="main">
+      <p>Fine-tuning a student on teacher outputs only ever shows it the states the teacher visited. At inference the student drifts, enters states it never trained on, and its mistakes compound: regret grows quadratically in the sequence length, O(T²ε). Long chain-of-thought reasoning has a large T, so this is exactly where the problem bites.</p>
+      <p>DAgger's fix is to let the student act and then ask the expert what it should have done in the states the student actually reached, which brings regret down to O(Tε). A teacher language model can be queried this way for free: the student samples a solution, the teacher scores every generated token, and training minimizes the per-token KL between the two. That is on-policy distillation.</p>
+      <p>OPD only touches the distribution over text tokens. For a vision-language model the image is just part of the prefix, so the method should transfer. This project checks whether it does, whether the data-efficiency claim survives, and, since the prefix now contains a chart, where the teacher's feedback actually lands.</p>
+    </div>
   </div>
 </section>
 
 <section id="setup">
-  <aside><span class="num">02</span>Setup</aside>
-  <div>
-    <h2>One student, one teacher, one GPU</h2>
-    <div class="pill-row">
-      <span class="pill">Qwen3-VL-2B-Instruct student</span><span class="pill">Qwen3-VL-8B-Instruct teacher</span>
-      <span class="pill">LoRA r=64, language model only</span><span class="pill">ChartQA, human-written questions</span>
-      <span class="pill">3,000 train · 500 test</span><span class="pill">Colab A100 40 GB</span><span class="pill">seed 42</span>
+  <div class="sec-head rv"><div class="sec-num"><b>02</b>Setup</div><h2>One student, one teacher, one GPU, one fixed test set</h2></div>
+  <div class="body rv">
+    <div class="side">Everything below is scored the same way: relaxed accuracy on the same 500 human-written ChartQA questions, seed 42.</div>
+    <div class="main">
+      <div class="cards-3">
+        <div class="card"><h4>Student</h4><div class="big">2B</div><div class="sub">Qwen3-VL-2B-Instruct · LoRA r=64 on the language model · 69.7M trainable (3.17%) · vision tower frozen</div></div>
+        <div class="card"><h4>Teacher</h4><div class="big">8B</div><div class="sub">Qwen3-VL-8B-Instruct · same tokenizer, so the KL is exact over the full vocabulary</div></div>
+        <div class="card"><h4>Data</h4><div class="big">3,000 / 500</div><div class="sub">ChartQA human-written questions · images capped at 768 px → 300 to 600 visual tokens</div></div>
+      </div>
+      <p>Scoring: numeric answers within 5% relative error, text answers exact after normalization, and a missing <code>Answer:</code> line counts as wrong. Every number carries a percentile bootstrap interval; comparisons between two systems use a paired bootstrap over the same questions, which is far tighter than comparing two independent intervals.</p>
+      <div class="note"><p><strong>Why human-written questions only.</strong> On a random ChartQA mix, three quarters machine-generated, the 2B student already scores 0.84 zero-shot against 0.90 for a 4B teacher: too little headroom to separate any two methods. Human questions open a 17.6-point gap between student and teacher.</p></div>
     </div>
-    <p>Both models share the tokenizer, so the KL is computed token by token over the full vocabulary. The vision tower and projector stay frozen; a rank-64 LoRA on the language-model projections holds 69.7M trainable parameters (3.17%). Images are capped at 768 px on the longer side, which keeps them between 300 and 600 visual tokens and keeps teacher, student, optimizer, and activations under 27 GB.</p>
-    <p>Scoring is ChartQA relaxed accuracy on a fixed 500-question test set: numeric answers within 5% relative error, text answers exact after normalization, and a missing <code>Answer:</code> line counts as wrong. Every number below carries a percentile bootstrap interval; comparisons between two systems use a paired bootstrap over the same questions.</p>
-    <div class="callout"><p>Why human-written questions only: on a random ChartQA mix (three quarters machine-generated) the 2B student already scores 0.84 zero-shot against 0.90 for a 4B teacher, too little headroom to separate any two methods. Restricting to human questions opens a 17.6-point gap.</p></div>
   </div>
 </section>
 
-<section id="finding-1">
-  <aside><span class="num">03</span>Finding 1</aside>
-  <div>
-    <h2>OPD reaches full-data SFT accuracy with 10% of the questions</h2>
-    <p>Both methods train on the first N questions of the same sampled train set with the number of optimizer updates held fixed across budgets (302 steps for SFT, 150 steps of 16 rollouts for OPD), so data quantity is the only variable.</p>
-    <figure class="full">
-      <img src="assets/data_efficiency.png" alt="Accuracy versus number of training questions for SFT and OPD, with bootstrap intervals, student zero-shot and teacher reference lines" width="900" height="600">
-      <figcaption>Accuracy on the 500-question test set against training questions (log scale). Error bars are 95% bootstrap intervals. The dotted line is the zero-shot student, the dashed line the 8B teacher.</figcaption>
-    </figure>
-    <div class="tbl"><table>
-      <thead><tr><th>Training questions</th><th class="num"><span class="swatch" style="background:var(--sft)"></span>SFT</th><th class="num"><span class="swatch" style="background:var(--opd)"></span>OPD</th><th class="num">OPD − SFT, paired 95% CI</th></tr></thead>
-      <tbody>
-        <tr class="hl"><td>300 (10%)</td><td class="num">0.778 <span class="ci">[0.742, 0.814]</span></td><td class="num">0.836 <span class="ci">[0.804, 0.868]</span></td><td class="num pos">+0.058 [+0.028, +0.088]</td></tr>
-        <tr><td>900 (30%)</td><td class="num">0.808 <span class="ci">[0.774, 0.842]</span></td><td class="num">0.820 <span class="ci">[0.786, 0.854]</span></td><td class="num neu">+0.012 [−0.016, +0.040]</td></tr>
-        <tr><td>3,000 (100%)</td><td class="num">0.834 <span class="ci">[0.802, 0.866]</span></td><td class="num">0.824 <span class="ci">[0.790, 0.858]</span></td><td class="num neu">−0.010 [−0.036, +0.016]</td></tr>
-      </tbody>
-    </table></div>
-    <p>At 300 questions OPD beats SFT by 5.8 points and the paired interval excludes zero. The 300-question OPD student sits within noise of the teacher. Because 300 was the smallest budget tested, the true crossover is at or below 10% of the data.</p>
-  </div>
-</section>
-
-<section id="finding-2">
-  <aside><span class="num">04</span>Finding 2</aside>
-  <div>
-    <h2>With enough data, both methods saturate at the teacher</h2>
-    <p>At 900 and 3,000 questions the paired differences are +1.2 and −1.0 points, both inside their intervals. This is the expected shape, not a failure: the full-data SFT student is already within one point of the 8B teacher, so there is nothing left for OPD to add on this task with this teacher. Separating the methods at full data would need a stronger teacher or a harder test set, not more steps.</p>
-    <p>Two caveats stated plainly. All runs use a single seed. The 3,000-question OPD run covers each question less than once (2,400 rollouts), so it is undertrained relative to SFT's two epochs; the fixed-update design was chosen deliberately, but it favours SFT at the largest budget.</p>
-  </div>
-</section>
-
-<section id="finding-3">
-  <aside><span class="num">05</span>Finding 3</aside>
-  <div>
-    <h2>The teacher's feedback lands on the answer line first, not on the digits read off the chart</h2>
-    <p>For 100 test questions the student samples a solution at temperature 1.0, the same regime as training. Teacher and student then score the identical sequence, and every generated token gets a reverse KL. Tokens are sorted into four roles: the final <code>Answer:</code> line, digits and operators on lines with an arithmetic cue, digits elsewhere (values read from the chart), and everything else. The statistic per role is <em>concentration</em>: its share of total KL divided by its share of tokens.</p>
-    <div class="fig-pair">
-      <figure><img src="assets/token_classes_baseline.png" alt="Share of tokens versus share of teacher KL mass per token class for the zero-shot student" width="975" height="540"><figcaption>Zero-shot student, 9,456 tokens. The answer line takes 2.7× its length share of feedback; chart values and arithmetic take about 0.4×.</figcaption></figure>
-      <figure><img src="assets/token_classes_opd_q300.png" alt="Share of tokens versus share of teacher KL mass per token class for the OPD-300 student" width="975" height="540"><figcaption>After OPD on 300 questions, 11,956 tokens. Answer-line feedback collapses to 0.4×; the residual shifts toward chart values (0.7×).</figcaption></figure>
+<section id="f1">
+  <div class="sec-head rv"><div class="sec-num"><b>03</b>Finding 1</div><h2>OPD reaches full-data SFT accuracy with 10% of the questions</h2></div>
+  <div class="body rv">
+    <div class="side">Both methods see the first N questions of the same train set. Update counts are fixed across budgets: SFT 302 steps, OPD 150 steps × 16 rollouts.</div>
+    <div class="main">
+      <div class="chart" id="deChart">
+        <div class="ct"><h3>Accuracy vs. training questions</h3><div class="legend"><span><i style="background:var(--sft)"></i>SFT</span><span><i style="background:var(--opd)"></i>OPD</span><span><i style="background:var(--teach);height:1px;border-top:2px dashed var(--teach);background:none"></i>teacher</span><span><i style="background:none;border-top:2px dotted var(--base);height:1px"></i>zero-shot</span></div></div>
+        <svg id="deSvg" viewBox="0 0 760 360" role="img" aria-label="Line chart of accuracy versus training questions for SFT and OPD with 95% intervals"></svg>
+        <div class="tip" id="deTip"></div>
+      </div>
+      <p class="caption">Hover a point for its interval. Log-scaled x axis. Numbers regenerated from the result files on the Hub.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Training questions</th><th class="n">SFT</th><th class="n">OPD</th><th class="n">OPD − SFT, paired 95% CI</th></tr></thead>
+        <tbody>
+          <tr class="hl"><td>300 (10%)</td><td class="n">0.778 <span class="ci">[0.742, 0.814]</span></td><td class="n">0.836 <span class="ci">[0.804, 0.868]</span></td><td class="n pos">+0.058 [+0.028, +0.088]</td></tr>
+          <tr><td>900 (30%)</td><td class="n">0.808 <span class="ci">[0.774, 0.842]</span></td><td class="n">0.820 <span class="ci">[0.786, 0.854]</span></td><td class="n neu">+0.012 [−0.016, +0.040]</td></tr>
+          <tr><td>3,000 (100%)</td><td class="n">0.834 <span class="ci">[0.802, 0.866]</span></td><td class="n">0.824 <span class="ci">[0.790, 0.858]</span></td><td class="n neu">−0.010 [−0.036, +0.016]</td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:18px">At 300 questions OPD beats SFT by 5.8 points and the paired interval excludes zero; the 300-question OPD student sits within noise of the teacher. Because 300 was the smallest budget tested, the true crossover is at or below 10% of the data.</p>
     </div>
-    <div class="tbl"><table>
-      <thead><tr><th>Token class</th><th class="num">Zero-shot: tokens → KL mass</th><th class="num">Concentration</th><th class="num">After OPD-300</th></tr></thead>
-      <tbody>
-        <tr><td>answer</td><td class="num">7.3% → 19.5%</td><td class="num">2.67×</td><td class="num">0.38×</td></tr>
-        <tr><td>text (connectives, format, words)</td><td class="num">74.8% → 73.9%</td><td class="num">0.99×</td><td class="num">1.24×</td></tr>
-        <tr><td>chart_value</td><td class="num">7.4% → 2.9%</td><td class="num">0.39×</td><td class="num">0.73×</td></tr>
-        <tr><td>arithmetic</td><td class="num">10.5% → 3.7%</td><td class="num">0.36×</td><td class="num">0.42×</td></tr>
-        <tr><td>mean KL per token</td><td class="num">0.489</td><td class="num"></td><td class="num">0.235</td></tr>
-      </tbody>
-    </table></div>
-    <p>Before training the teacher disagrees most where the student commits to an answer and where it chooses a format; the trained student switches to the teacher's <code>Step 1:</code> layout and the answer-line disagreement almost disappears. Digits get less feedback than their length would predict for two reasons visible in the heatmaps: both models condition on the same image, and numbers are tokenized digit by digit with the disagreement sitting on the first digit, which per-token averaging dilutes. What remains after OPD is mostly perception, not answer selection.</p>
-    <p>This matches the premise of several 2026 papers that vanilla OPD under-weights visual grounding and propose re-weighting it; the measurement here is an independent, cheaper way of seeing the same thing.</p>
-    <figure id="hm1"><img src="assets/heatmap_baseline_test_00034.png" alt="Token heatmap of a zero-shot student solution coloured by per-token reverse KL" onerror="this.closest('figure').style.display='none'"><figcaption>Zero-shot student on test question 34. Background intensity is the per-token reverse KL; the underline colour is the token role.</figcaption></figure>
-    <figure id="hm2"><img src="assets/heatmap_opd_q300_test_00034.png" alt="Token heatmap of the OPD-300 student solution on the same question, same colour scale" onerror="this.closest('figure').style.display='none'"><figcaption>The OPD-300 student on the same question and colour scale: shorter, in the teacher's format, with far less disagreement outside the numbers.</figcaption></figure>
+  </div>
+</section>
+
+<section id="f2">
+  <div class="sec-head rv"><div class="sec-num"><b>04</b>Finding 2</div><h2>With enough data both methods saturate at the teacher</h2></div>
+  <div class="body rv">
+    <div class="side">The expected shape, and the honest one.</div>
+    <div class="main">
+      <p>At 900 and 3,000 questions the paired differences are +1.2 and −1.0 points, both inside their intervals. The full-data SFT student is already within one point of the 8B teacher, so there is nothing left for OPD to add on this task with this teacher. Separating the methods at full data would need a stronger teacher or a harder test set, not more steps.</p>
+      <p>Two caveats stated plainly. All runs use a single seed. The 3,000-question OPD run covers each question less than once (2,400 rollouts), so it is undertrained relative to SFT's two epochs; the fixed-update design was deliberate, but it favours SFT at the largest budget.</p>
+    </div>
+  </div>
+</section>
+
+<section id="f3">
+  <div class="sec-head rv"><div class="sec-num"><b>05</b>Finding 3</div><h2>The teacher's feedback lands on the answer line first, not on the digits read off the chart</h2></div>
+  <div class="body rv">
+    <div class="side">100 test questions, rollouts sampled at temperature 1.0, every generated token scored by both models. Concentration = share of KL ÷ share of tokens.</div>
+    <div class="main">
+      <div class="chart" id="tcChart">
+        <div class="ct"><h3>Where the teacher's KL mass lands, by token role</h3><div class="seg" role="tablist"><button class="on" data-k="base" role="tab">zero-shot student</button><button data-k="opd" role="tab">after OPD-300</button></div></div>
+        <svg id="tcSvg" viewBox="0 0 760 300" role="img" aria-label="Grouped bar chart comparing share of tokens with share of teacher KL mass for four token classes, switchable between the zero-shot and OPD-300 student"></svg>
+        <div class="legend" style="margin-top:8px"><span><i style="background:var(--line-2);height:10px"></i>share of tokens</span><span><i style="background:var(--opd);height:10px"></i>share of teacher feedback (KL mass)</span><span>× = concentration</span></div>
+      </div>
+      <div class="tbl"><table>
+        <thead><tr><th>Token class</th><th class="n">Zero-shot: tokens → KL</th><th class="n">Concentration</th><th class="n">After OPD-300</th></tr></thead>
+        <tbody>
+          <tr><td>answer line</td><td class="n">7.3% → 19.5%</td><td class="n">2.67×</td><td class="n">0.38×</td></tr>
+          <tr><td>text (connectives, format, words)</td><td class="n">74.8% → 73.9%</td><td class="n">0.99×</td><td class="n">1.24×</td></tr>
+          <tr><td>chart values (digits outside arithmetic)</td><td class="n">7.4% → 2.9%</td><td class="n">0.39×</td><td class="n">0.73×</td></tr>
+          <tr><td>arithmetic (digits and operators)</td><td class="n">10.5% → 3.7%</td><td class="n">0.36×</td><td class="n">0.42×</td></tr>
+          <tr><td>mean KL per token</td><td class="n">0.489</td><td class="n"></td><td class="n">0.235</td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:18px">Before training the teacher disagrees most where the student commits to an answer and where it chooses a format. The trained student switches to the teacher's <code>Step 1:</code> layout and the answer-line disagreement almost disappears. Digits get less feedback than their length would predict for two reasons visible in the heatmaps: both models condition on the same image, and numbers are tokenized digit by digit with the disagreement sitting on the first digit, which per-token averaging dilutes. What remains after OPD is mostly perception, not answer selection.</p>
+      <p>This is the premise of several 2026 papers that vanilla OPD under-weights visual grounding and propose re-weighting; the measurement here is an independent, cheaper way of seeing the same thing.</p>
+      <figure><img src="assets/heatmap_baseline_test_00034.png" alt="Token heatmap of a zero-shot student solution coloured by per-token reverse KL" onerror="this.closest('figure').style.display='none'"><figcaption>Zero-shot student on test question 34. Background intensity is the per-token reverse KL; the underline colour is the token role.</figcaption></figure>
+      <figure><img src="assets/heatmap_opd_q300_test_00034.png" alt="Token heatmap of the OPD-300 student on the same question, same colour scale" onerror="this.closest('figure').style.display='none'"><figcaption>The OPD-300 student on the same question and colour scale: shorter, in the teacher's format, with far less disagreement outside the numbers.</figcaption></figure>
+    </div>
   </div>
 </section>
 
 <section id="vlm">
-  <aside><span class="num">06</span>What changes for a VLM</aside>
-  <div>
-    <h2>The method transfers; the engineering is where the work is</h2>
-    <ul>
-      <li><strong>Image tokens never enter the loss.</strong> A chart becomes 300 to 600 visual tokens in the prompt. The SFT collator and the OPD trainer mask every prompt and image position; only generated text up to and including the end-of-turn token is supervised or scored.</li>
-      <li><strong>One image tensor, two models.</strong> The processor runs once per batch; teacher and student receive identical pixel tensors and the identical token sequence.</li>
-      <li><strong>Resolution is the memory knob.</strong> Capping the longer side at 768 px is what makes teacher, student, optimizer and activations fit in 27 GB.</li>
-      <li><strong>Left-padded rollouts and <code>logits_to_keep</code>.</strong> Every generation starts at the same index, so both models compute logits only for the generated span: about 1.2 GB per model instead of logits over the image positions too.</li>
-      <li><strong>Rollout, not scoring, is the cost.</strong> Per step at batch 16: rollout 15 to 47 s, teacher forward 1 s, student forward and backward 3.5 s. Decoding is latency-bound, so a larger rollout batch is almost free; batch 16 doubled throughput at the same memory.</li>
-      <li><strong>Merged weights for evaluation.</strong> The LoRA adapter is merged into the base and pushed as a standalone model, so vLLM evaluation is one code path for every model.</li>
-      <li><strong>Disconnect-safe training.</strong> Adapter, optimizer, scheduler and data cursor go to the Hub every 25 steps with a pointer file; a real Colab disconnect at step 75 resumed and finished without repeating or skipping a batch.</li>
-    </ul>
-    <div class="tbl"><table>
-      <thead><tr><th>Run</th><th class="num">Cost on an A100 40 GB</th></tr></thead>
-      <tbody>
-        <tr><td>Evaluate 500 questions with vLLM</td><td class="num">12 s (2B), 36 s (8B) + ~3 min engine start</td></tr>
-        <tr><td>Sample and verify teacher solutions, 3,000 questions</td><td class="num">minutes; 80.1% kept</td></tr>
-        <tr><td>SFT, 302 steps, effective batch 16</td><td class="num">12 min, 2.3 s/step</td></tr>
-        <tr><td>OPD, 150 steps, batch 16</td><td class="num">~90 min, 35 s/step, peak 27 GB</td></tr>
-      </tbody>
-    </table></div>
+  <div class="sec-head rv"><div class="sec-num"><b>06</b>Engineering</div><h2>The method transfers; the engineering is where the work is</h2></div>
+  <div class="body rv">
+    <div class="side">Measured on an A100 40 GB. Per OPD step at batch 16: rollout 15 to 47 s, teacher forward 1 s, student forward-backward 3.5 s, peak 27 GB.</div>
+    <div class="main">
+      <div class="grid-2">
+        <div class="card"><h4>Image tokens never enter the loss</h4><div class="sub">A chart is 300 to 600 visual tokens in the prompt. The SFT collator and the OPD trainer mask every prompt and image position; only generated text up to the end-of-turn token is supervised or scored.</div></div>
+        <div class="card"><h4>One image tensor, two models</h4><div class="sub">The processor runs once per batch. Teacher and student receive identical pixel tensors and the identical token sequence.</div></div>
+        <div class="card"><h4>Resolution is the memory knob</h4><div class="sub">Capping the longer side at 768 px is what makes teacher, student, optimizer and activations fit in 27 GB.</div></div>
+        <div class="card"><h4>Left-padded rollouts + <code>logits_to_keep</code></h4><div class="sub">Every generation starts at the same index, so both models compute logits only for the generated span: about 1.2 GB per model instead of logits over the image positions too.</div></div>
+        <div class="card"><h4>Rollout, not scoring, is the cost</h4><div class="sub">Decoding is latency-bound, so a larger rollout batch is nearly free. Batch 16 doubled throughput at the same memory as batch 8.</div></div>
+        <div class="card"><h4>Disconnect-safe training</h4><div class="sub">Adapter, optimizer, scheduler and data cursor go to the Hub every 25 steps with a pointer file. A real Colab disconnect at step 75 resumed and finished without repeating a batch.</div></div>
+      </div>
+      <div class="tbl" style="margin-top:22px"><table>
+        <thead><tr><th>Run</th><th class="n">Cost</th></tr></thead>
+        <tbody>
+          <tr><td>Evaluate 500 questions with vLLM</td><td class="n">12 s (2B) · 36 s (8B) · ~3 min engine start</td></tr>
+          <tr><td>Sample and verify teacher solutions, 3,000 questions</td><td class="n">minutes · 80.1% kept</td></tr>
+          <tr><td>SFT, 302 steps, effective batch 16</td><td class="n">12 min · 2.3 s/step</td></tr>
+          <tr><td>OPD, 150 steps, batch 16</td><td class="n">~90 min · 35 s/step · peak 27 GB</td></tr>
+        </tbody>
+      </table></div>
+    </div>
   </div>
 </section>
 
 <section id="limits">
-  <aside><span class="num">07</span>Limitations</aside>
-  <div>
-    <h2>What this does not show</h2>
-    <ul>
-      <li>One task, one model family, one seed. The 5.8-point low-data result has a paired interval that excludes zero, but a multi-seed repeat is the obvious next check.</li>
-      <li>Token roles are heuristic (line-level cues and digit detection); the "text" class mixes structural tokens with reasoning words.</li>
-      <li>The comparison is against the vanilla OPD objective. Re-weighted variants from 2026 (visual-advantage weighting, gradient steering, Fisher projection) were not run.</li>
-      <li>Full-data results are ceiling-limited by an 8B teacher on ChartQA; a stronger teacher would be needed to separate methods at 3,000 questions.</li>
-    </ul>
-  </div>
-</section>
-
-<section id="related">
-  <aside><span class="num">08</span>Context</aside>
-  <div>
-    <h2>Where this sits in 2026</h2>
-    <p>On-policy distillation for language models was formalized by MiniLLM and GKD (Agarwal et al., 2024) and popularized by Thinking Machines' 2025 write-up. Its extension to vision-language models became an active thread in 2026; this project is a small, fully reproducible replication with a measurement that corroborates the motivation of the re-weighting papers.</p>
-    <ul>
-      <li><a href="https://arxiv.org/abs/2510.23497">VOLD</a>: reasoning transfer from LLMs to VLMs via OPD; cold-start alignment matters.</li>
-      <li><a href="https://arxiv.org/abs/2605.21924">Visual-Advantage OPD</a>: weights tokens by how much the teacher's log-probability changes with fine-grained visual access.</li>
-      <li><a href="https://arxiv.org/abs/2606.00564">Decomposed OPD / Visual Gradient Steering</a>: finds OPD gradients under-serve visual grounding and steers them.</li>
-      <li><a href="https://arxiv.org/abs/2608.01263">Fisher-Projected OPD</a>: distills only what the student can see.</li>
-      <li><a href="https://arxiv.org/html/2604.13016v1">Rethinking OPD</a>: OPD as dense KL-constrained RL; the teacher's log-ratio is an implicit reward.</li>
-      <li><a href="https://arxiv.org/pdf/2605.05940">Near-Policy Distillation</a>: attacks the rollout bottleneck measured above with asynchronous generation.</li>
-    </ul>
-  </div>
-</section>
-
-<section id="reproduce">
-  <aside><span class="num">09</span>Reproduce</aside>
-  <div>
-    <h2>Everything runs from five Colab notebooks</h2>
-    <p>Each notebook is generated from a script in the repository, clones the repo, reads the HuggingFace token from Colab Secrets, and pushes every artifact (sampled data, verified teacher solutions, LoRA checkpoints, merged models, result JSON) to private Hub repos. Nothing lives on Drive or on the Colab disk.</p>
-    <div class="links">
-      <a class="btn primary" href="https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning">Repository</a>
-      <a class="btn" href="https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/00_setup_and_eval.ipynb">00 Data + baselines</a>
-      <a class="btn" href="https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/01_sft.ipynb">01 SFT</a>
-      <a class="btn" href="https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/02_opd.ipynb">02 OPD</a>
-      <a class="btn" href="https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/03_data_efficiency.ipynb">03 Data efficiency</a>
-      <a class="btn" href="https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/04_token_feedback.ipynb">04 Token feedback</a>
+  <div class="sec-head rv"><div class="sec-num"><b>07</b>Limits</div><h2>What this does not show</h2></div>
+  <div class="body rv">
+    <div class="side">Kept short on purpose.</div>
+    <div class="main">
+      <ul>
+        <li>One task, one model family, one seed. The 5.8-point low-data result has a paired interval that excludes zero, but a multi-seed repeat is the obvious next check.</li>
+        <li>Token roles are heuristic (line-level cues and digit detection); the "text" class mixes structural tokens with reasoning words.</li>
+        <li>Only the vanilla OPD objective was run. The 2026 re-weighted variants (visual-advantage weighting, gradient steering, Fisher projection) are not compared.</li>
+        <li>Full-data results are ceiling-limited by an 8B teacher on ChartQA.</li>
+      </ul>
     </div>
-    <p>The core is about 1,500 lines of Python with 53 CPU tests, including a full OPD step on a tiny randomly initialised Qwen3-VL and prompt-masking checks against the real processor.</p>
+  </div>
+</section>
+
+<section id="ctx">
+  <div class="sec-head rv"><div class="sec-num"><b>08</b>Context</div><h2>Where this sits in 2026</h2></div>
+  <div class="body rv">
+    <div class="side">A small, fully reproducible replication with one measurement that corroborates the motivation of the re-weighting papers.</div>
+    <div class="main">
+      <ul>
+        <li><a href="https://arxiv.org/abs/2510.23497">VOLD</a>: reasoning transfer from LLMs to VLMs via OPD; cold-start alignment matters.</li>
+        <li><a href="https://arxiv.org/abs/2605.21924">Visual-Advantage OPD</a>: weights tokens by how much the teacher's log-probability changes with fine-grained visual access.</li>
+        <li><a href="https://arxiv.org/abs/2606.00564">Decomposed OPD / Visual Gradient Steering</a>: finds OPD gradients under-serve visual grounding and steers them.</li>
+        <li><a href="https://arxiv.org/abs/2608.01263">Fisher-Projected OPD</a>: distills only what the student can see.</li>
+        <li><a href="https://arxiv.org/html/2604.13016v1">Rethinking OPD</a>: OPD as dense KL-constrained RL; the teacher's log-ratio is an implicit reward.</li>
+        <li><a href="https://arxiv.org/pdf/2605.05940">Near-Policy Distillation</a>: attacks the rollout bottleneck measured above with asynchronous generation.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="repro">
+  <div class="sec-head rv"><div class="sec-num"><b>09</b>Reproduce</div><h2>Five Colab notebooks, zero local state</h2></div>
+  <div class="body rv">
+    <div class="side">About 1,500 lines of Python, 53 CPU tests including a full OPD step on a tiny Qwen3-VL, CI on every push.</div>
+    <div class="main">
+      <p>Each notebook is generated from a script in the repository, clones the repo, reads the HuggingFace token from Colab Secrets, and pushes every artifact (sampled data, verified teacher solutions, LoRA checkpoints, merged models, result JSON) to private Hub repos. Nothing lives on Drive or on the Colab disk.</p>
+      <div class="btns">
+        <a class="btn primary" href="https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning">Repository</a>
+        <a class="btn" href="https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/00_setup_and_eval.ipynb">00 Data + baselines</a>
+        <a class="btn" href="https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/01_sft.ipynb">01 SFT</a>
+        <a class="btn" href="https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/02_opd.ipynb">02 OPD</a>
+        <a class="btn" href="https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/03_data_efficiency.ipynb">03 Data efficiency</a>
+        <a class="btn" href="https://colab.research.google.com/github/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/notebooks/04_token_feedback.ipynb">04 Token feedback</a>
+      </div>
 <pre><code>uv venv &amp;&amp; source .venv/bin/activate
 uv pip install -e ".[dev]"
 uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 uv pip install transformers peft
 pytest</code></pre>
+    </div>
   </div>
 </section>
 
 <footer>
   <span>Frank Yang · <a href="https://ffy208.github.io/">ffy208.github.io</a> · <a href="https://github.com/ffy208">GitHub</a> · <a href="https://www.linkedin.com/in/ffy208/">LinkedIn</a></span>
-  <span>MIT License · Numbers traceable in <a href="https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/docs/resume_log.md">docs/resume_log.md</a></span>
+  <span>MIT License · every number is traceable in <a href="https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/docs/resume_log.md">docs/resume_log.md</a></span>
 </footer>
 
-</div>
+</main>
+
+<script>
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- hero accuracy scale ---------- */
+  (function scale() {
+    const svg = document.getElementById("scaleSvg"); if (!svg) return;
+    const W = 520, x0 = 20, x1 = 500, lo = 0.64, hi = 0.88;
+    const X = v => x0 + (v - lo) / (hi - lo) * (x1 - x0);
+    // label side: -1 = left of the dot, +1 = right of the dot; labels sit just above their interval line
+    const marks = [
+      { v: 0.668, lo: 0.626, hi: 0.710, c: css("--base"), l: "zero-shot", y: 108, side: -1 },
+      { v: 0.834, lo: 0.802, hi: 0.866, c: css("--sft"), l: "SFT 3,000 q", y: 58, side: -1 },
+      { v: 0.836, lo: 0.804, hi: 0.868, c: css("--opd"), l: "OPD 300 q", y: 30, side: 1 },
+      { v: 0.844, lo: 0.812, hi: 0.876, c: css("--teach"), l: "teacher", y: 128, side: 1 },
+    ];
+    el("line", { x1: x0, x2: x1, y1: 78, y2: 78, stroke: css("--line-2"), "stroke-width": 1 }, svg);
+    for (let v = 0.65; v <= 0.876; v += 0.05) {
+      el("line", { x1: X(v), x2: X(v), y1: 74, y2: 82, stroke: css("--line-2") }, svg);
+      const t = el("text", { x: X(v), y: 146, "text-anchor": "middle", fill: css("--fg-3"), "font-family": css("--mono"), "font-size": 11 }, svg); t.textContent = v.toFixed(2);
+    }
+    // gap band between zero-shot and teacher
+    el("rect", { x: X(0.668), y: 76, width: X(0.844) - X(0.668), height: 4, fill: css("--opd"), opacity: .35, rx: 2 }, svg);
+    marks.forEach((m, i) => {
+      const g = el("g", { opacity: 0 }, svg);
+      el("line", { x1: X(m.lo), x2: X(m.hi), y1: m.y, y2: m.y, stroke: m.c, "stroke-width": 2, opacity: .45 }, g);
+      el("line", { x1: X(m.v), x2: X(m.v), y1: m.y, y2: 78, stroke: m.c, "stroke-width": 1, "stroke-dasharray": "2 3", opacity: .6 }, g);
+      el("circle", { cx: X(m.v), cy: m.y, r: 5.5, fill: m.c, stroke: css("--bg-2"), "stroke-width": 2 }, g);
+      const t = el("text", { x: X(m.v) + 9 * m.side, y: m.y - 9, "text-anchor": m.side > 0 ? "start" : "end", fill: m.c, "font-family": css("--mono"), "font-size": 11, "font-weight": 600 }, g);
+      t.textContent = m.l;
+      if (reduced) { g.setAttribute("opacity", 1); return; }
+      g.style.transition = "opacity .6s"; setTimeout(() => g.setAttribute("opacity", 1), 500 + i * 220);
+    });
+  })();
+
+  /* ---------- data-efficiency line chart ---------- */
+  (function de() {
+    const svg = document.getElementById("deSvg"), tip = document.getElementById("deTip"); if (!svg) return;
+    const W = 760, H = 360, L = 58, R = 24, T = 18, B = 44;
+    const xs = [300, 900, 3000], lo = 0.62, hi = 0.89;
+    const X = q => L + (Math.log10(q) - Math.log10(250)) / (Math.log10(3600) - Math.log10(250)) * (W - L - R);
+    const Y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+    const series = {
+      sft: { c: css("--sft"), pts: [[300, .778, .742, .814], [900, .808, .774, .842], [3000, .834, .802, .866]], name: "SFT" },
+      opd: { c: css("--opd"), pts: [[300, .836, .804, .868], [900, .820, .786, .854], [3000, .824, .790, .858]], name: "OPD" },
+    };
+    const grid = el("g", { class: "grid" }, svg), axis = el("g", { class: "axis" }, svg);
+    for (let v = 0.65; v <= 0.88; v += 0.05) {
+      el("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v) }, grid);
+      const t = el("text", { x: L - 10, y: Y(v) + 4, "text-anchor": "end" }, axis); t.textContent = v.toFixed(2);
+    }
+    xs.forEach(q => { const t = el("text", { x: X(q), y: H - 14, "text-anchor": "middle" }, axis); t.textContent = q.toLocaleString(); });
+    const ax = el("text", { x: (L + W - R) / 2, y: H + 4, "text-anchor": "middle" }, axis); ax.textContent = "training questions (log scale)";
+    // reference lines
+    const ref = (v, dash, c, label, lx) => {
+      el("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), stroke: c, "stroke-width": 1.5, "stroke-dasharray": dash, opacity: .8 }, svg);
+      const t = el("text", { x: lx, y: Y(v) - 7, "text-anchor": "middle", class: "lbl" }, svg); t.textContent = label + " " + v.toFixed(3);
+    };
+    ref(0.668, "2 4", css("--base"), "student zero-shot", X(1650)); ref(0.844, "8 6", css("--teach"), "teacher", X(1650));
+    // band between series
+    Object.values(series).forEach(s => {
+      el("path", { d: "M" + s.pts.map(p => X(p[0]) + "," + Y(p[2])).join(" L") + " L" + s.pts.slice().reverse().map(p => X(p[0]) + "," + Y(p[3])).join(" L") + " Z", fill: s.c, opacity: .08 }, svg);
+    });
+    Object.entries(series).forEach(([k, s], si) => {
+      const path = el("path", { d: "M" + s.pts.map(p => X(p[0]) + "," + Y(p[1])).join(" L"), fill: "none", stroke: s.c, "stroke-width": 2.5, "stroke-linejoin": "round" }, svg);
+      if (!reduced) { const len = path.getTotalLength(); path.style.strokeDasharray = len; path.style.strokeDashoffset = len; path.style.transition = "stroke-dashoffset 1.4s cubic-bezier(.2,.7,.2,1) " + (0.2 + si * 0.25) + "s"; requestAnimationFrame(() => requestAnimationFrame(() => path.style.strokeDashoffset = 0)); }
+      s.pts.forEach(p => {
+        const g = el("g", { style: "cursor:crosshair" }, svg);
+        el("line", { x1: X(p[0]), x2: X(p[0]), y1: Y(p[2]), y2: Y(p[3]), stroke: s.c, "stroke-width": 1.5, opacity: .7 }, g);
+        [p[2], p[3]].forEach(v => el("line", { x1: X(p[0]) - 5, x2: X(p[0]) + 5, y1: Y(v), y2: Y(v), stroke: s.c, "stroke-width": 1.5, opacity: .7 }, g));
+        el("circle", { cx: X(p[0]), cy: Y(p[1]), r: 5.5, fill: s.c, stroke: css("--bg-2"), "stroke-width": 2 }, g);
+        el("circle", { cx: X(p[0]), cy: Y(p[1]), r: 16, fill: "transparent" }, g);
+        g.addEventListener("mouseenter", () => {
+          tip.textContent = s.name + " · " + p[0].toLocaleString() + " q · " + p[1].toFixed(3) + " [" + p[2].toFixed(3) + ", " + p[3].toFixed(3) + "]";
+          const box = svg.getBoundingClientRect(); const sx = box.width / W;
+          tip.style.left = (svg.offsetLeft + X(p[0]) * sx) + "px"; tip.style.top = (svg.offsetTop + Y(p[1]) * sx) + "px"; tip.classList.add("on");
+        });
+        g.addEventListener("mouseleave", () => tip.classList.remove("on"));
+      });
+    });
+  })();
+
+  /* ---------- token-class bars (morphing) ---------- */
+  (function tc() {
+    const svg = document.getElementById("tcSvg"); if (!svg) return;
+    const W = 760, H = 300, L = 46, R = 16, T = 30, B = 40;
+    const classes = ["answer", "text", "chart values", "arithmetic"];
+    const data = {
+      base: { tok: [.0733, .7475, .0743, .1049], kl: [.1953, .7386, .0287, .0374], conc: [2.67, 0.99, 0.39, 0.36] },
+      opd:  { tok: [.0570, .6588, .1489, .1352], kl: [.0217, .8137, .1082, .0565], conc: [0.38, 1.24, 0.73, 0.42] },
+    };
+    const Y = v => T + (1 - v / 0.9) * (H - T - B);
+    const grid = el("g", { class: "grid" }, svg), axis = el("g", { class: "axis" }, svg);
+    [0, .2, .4, .6, .8].forEach(v => { el("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v) }, grid); const t = el("text", { x: L - 8, y: Y(v) + 4, "text-anchor": "end" }, axis); t.textContent = Math.round(v * 100) + "%"; });
+    const slot = (W - L - R) / classes.length, bw = Math.min(46, slot * .28);
+    const bars = [];
+    classes.forEach((c, i) => {
+      const cx = L + slot * (i + .5);
+      const lab = el("text", { x: cx, y: H - 12, "text-anchor": "middle" }, axis); lab.textContent = c;
+      const tokRect = el("rect", { x: cx - bw - 4, width: bw, y: Y(0), height: 0, fill: css("--line-2"), rx: 3 }, svg);
+      const klRect = el("rect", { x: cx + 4, width: bw, y: Y(0), height: 0, fill: css("--opd"), rx: 3 }, svg);
+      const conc = el("text", { x: cx, y: Y(0) - 10, "text-anchor": "middle", class: "lbl", "font-weight": 600 }, svg);
+      [tokRect, klRect].forEach(r => { r.style.transition = reduced ? "none" : "y .8s cubic-bezier(.2,.7,.2,1), height .8s cubic-bezier(.2,.7,.2,1)"; });
+      conc.style.transition = reduced ? "none" : "y .8s cubic-bezier(.2,.7,.2,1)";
+      bars.push({ tokRect, klRect, conc });
+    });
+    let shown = false;
+    function render(k) {
+      const d = data[k];
+      bars.forEach((b, i) => {
+        b.tokRect.setAttribute("y", Y(d.tok[i])); b.tokRect.setAttribute("height", Y(0) - Y(d.tok[i]));
+        b.klRect.setAttribute("y", Y(d.kl[i])); b.klRect.setAttribute("height", Y(0) - Y(d.kl[i]));
+        const top = Math.min(Y(d.tok[i]), Y(d.kl[i])); b.conc.setAttribute("y", top - 10); b.conc.textContent = "×" + d.conc[i].toFixed(2);
+        b.conc.setAttribute("fill", d.conc[i] > 1 ? css("--opd") : css("--fg-2"));
+      });
+    }
+    document.querySelectorAll("#tcChart .seg button").forEach(btn => btn.addEventListener("click", () => {
+      document.querySelectorAll("#tcChart .seg button").forEach(b => b.classList.toggle("on", b === btn)); render(btn.dataset.k);
+    }));
+    const io = new IntersectionObserver(es => { es.forEach(e => { if (e.isIntersecting && !shown) { shown = true; render("base"); io.disconnect(); } }); }, { threshold: .3 });
+    io.observe(svg);
+    if (reduced) { shown = true; render("base"); }
+  })();
+
+  /* ---------- reveal on scroll ---------- */
+  const rv = document.querySelectorAll(".rv");
+  if (reduced) { rv.forEach(e => e.classList.add("in")); return; }
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: .12, rootMargin: "0px 0px -6% 0px" });
+  rv.forEach(e => io.observe(e));
+})();
+</script>
 </body>
 </html>
