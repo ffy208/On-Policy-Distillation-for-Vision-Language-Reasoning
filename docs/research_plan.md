@@ -92,3 +92,25 @@ Timeline at roughly 10 hours per week:
 1. Ask for PACE allocation and a faculty mentor with the project page.
 2. Add per-step role-KL logging (one afternoon); every future run then produces the dynamics data for free.
 3. Run the 100-question ChartQA point and 3 seeds at 300 on whatever GPU is available; this decides how strong the headline is before any new task is built.
+
+## 7. Collision check for a self-distillation variant (2026-09-09)
+
+Asked: could on-policy *self*-distillation (same 2B model as teacher with privileged information) be the paper? Prior-work check:
+
+| Idea | Already done by | Date |
+|---|---|---|
+| Resolution as privilege (teacher sees full-res, student low-res) | RP-OPSD (2607.24447), Qwen3.5-9B, +5.45% rel., 1.78x faster than OPSD | Jul 2026 |
+| Crops as privilege | Vision-OPD (2605.18740) | May 2026 |
+| Answer-revealing vs answer-free hints for multimodal | PTD-PO (2606.07000): argues against answer-revealing, uses spatial + textual hints | Jun 2026 |
+| Balancing several privilege types | AVSD (2605.20643), text math/code | May 2026 |
+| Evidence-grounded self-teacher + token weighting by visual reliance | Video-OPSD (2608.27065) | Aug 2026 |
+| Visual cues as recoverable privilege | ViCuR (2606.05718) | Jun 2026 |
+| Augmented views, no privilege | S2VOPD (2608.14144) | Aug 2026 |
+| Length-collapse mechanism of OPSD | One Symptom, Three Levers (2608.25936) | Aug 2026 |
+| Which teacher tokens are reliable (position) | 2605.21606; Position bias of OPD (2606.22600) | May/Jun 2026 |
+
+Verdict: every ingredient of "answer vs visual privilege for a VLM self-teacher" exists as a separate paper, and the cadence is roughly one new OPSD-for-VLM paper every two to three weeks. A method paper here is very likely to be scooped or judged incremental. Self-distillation variants should enter the work only as *conditions* of a study, not as the contribution.
+
+What the check did **not** find for VLMs: an OPD-vs-SFT data-budget crossover study, an out-of-distribution (chart-to-chart shift) comparison, or feedback-allocation dynamics by token role over training. For text LLMs, Rethinking OPD (2604.13016) and Position Bias (2606.22600) cover dynamics partially. The regime-study plan in sections 2 to 4 therefore stands, with one addition:
+
+- **Diagnostic framing.** Use the token-role feedback tool as the paper's lens: measure where the teacher's signal lands and how it moves over training for vanilla OPD, an answer-privileged self-teacher (SDPO-style), and a resolution-privileged self-teacher (RP-OPSD reimplementation, cheap on our infrastructure). This turns the self-distillation interest into three rows of one table instead of a competing method, and it is the kind of comparison the method papers do not report.
