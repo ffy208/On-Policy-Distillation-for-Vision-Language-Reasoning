@@ -39,9 +39,11 @@ Qwen3-VL-8B-Instruct. Task: ChartQA, human-written questions, 3000 train / 500 t
 - Accomplished a statistically significant low-data win for OPD over supervised distillation, as measured by a paired-bootstrap difference of +5.8 points [+2.8, +8.8] at 300 questions (OPD 0.836 vs SFT 0.778, same questions, same number of optimizer updates), by holding update counts fixed across methods so data quantity is the only variable.
 - Documented the saturation regime honestly: at 900 questions the paired difference is +1.2 [-1.6, +4.0] and at 3000 questions -1.0 [-3.6, +1.6], both within noise, because both methods converge to the teacher ceiling of 0.844 with a 500-question test set. Caveats recorded: single seed; the 3000-question OPD run covers each question less than once (2400 rollouts), so it is undertrained relative to SFT's 2 epochs.
 
-### Stage 4 (code complete 2026-09-08, Colab run pending)
+### Stage 4 (completed 2026-09-09)
 
-- [pending] Share of teacher KL mass by token class (chart_value / arithmetic / text / answer) and the concentration ratio per class for the zero-shot student on 100 test questions; the same for the OPD-300 student; number of tokens analyzed.
+- Accomplished a token-level account of where on-policy teacher feedback lands on a VLM, as measured over 9456 generated tokens from 100 test-question rollouts of the zero-shot student: the final-answer line holds 7.3% of tokens but 19.5% of the teacher's KL mass (concentration 2.67x), reasoning text is proportional (0.99x), and chart-reading numbers and arithmetic tokens receive less than their share (0.39x and 0.36x), by scoring each student rollout with both models and aggregating the full-vocabulary reverse KL by heuristic token role.
+- Accomplished a before/after comparison that shows what OPD changes, as measured by the OPD-300 student's mean per-token KL falling from 0.489 to 0.235 (11956 tokens), answer-line feedback collapsing from 19.5% to 2.2% of KL mass (2.67x to 0.38x), and the residual feedback shifting toward chart values (0.39x to 0.73x), by re-running the same analysis on the trained student with identical questions and colour scale.
+- Method observation recorded: numbers are tokenized into single digits and the teacher-student disagreement on a number sits almost entirely on its first digit (visible in the heatmaps), so per-token averaging dilutes number-level feedback; a digit-position breakdown is reported alongside the class table. Caveat: token roles are heuristic; the `text` class mixes structural and reasoning tokens.
 
 ## Metrics to capture in later stages
 
@@ -72,4 +74,4 @@ Stage 5 (optional), self-distillation
 
 - Built an on-policy distillation pipeline for vision-language models (Qwen3-VL 2B student, 8B teacher) on ChartQA that raised student accuracy from 0.668 to 0.836 on 500 held-out human-written questions with only 300 training questions, beating supervised distillation on the same questions by 5.8 points (paired 95% CI +2.8 to +8.8).
 - Showed that on-policy distillation matches full-data supervised distillation (0.834 on 3000 questions) with 10% of the training questions, replicating the data-efficiency result of Agarwal et al. in the vision-language setting.
-- [pending: analysis claim, e.g. showed that X% of token-level teacher feedback concentrates on chart-reading numeric tokens].
+- Measured where token-level teacher feedback lands: the final-answer line receives 2.7x its length share of KL from the teacher before training, and on-policy distillation removes that gap (0.38x) while halving mean per-token KL, leaving chart-reading numbers as the main residual error source.

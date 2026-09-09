@@ -168,11 +168,23 @@ OPD with 300 questions (10% of the data) matches full-data SFT and sits within n
 
 Student-teacher gap: 17.6 points. Evaluation of 500 rows takes 12 s (2B) and 36 s (8B) with vLLM on the A100.
 
+### Stage 4 token-level feedback (2026-09-09, 100 test questions, rollouts sampled at temperature 1.0)
+
+| Token class | Zero-shot student: tokens -> KL mass (concentration) | OPD-300 student: concentration |
+|---|---|---|
+| answer | 7.3% -> 19.5% (2.67x) | 0.38x |
+| text | 74.8% -> 73.9% (0.99x) | 1.24x |
+| chart_value | 7.4% -> 2.9% (0.39x) | 0.73x |
+| arithmetic | 10.5% -> 3.7% (0.36x) | 0.42x |
+| mean KL per token | 0.489 | 0.235 |
+
+Before training, the teacher's feedback concentrates on the final answer and on discourse/format tokens, not on chart-reading digits; numbers are tokenized digit by digit and the disagreement sits on the first digit of a number, which per-token averaging dilutes. After OPD the answer-line feedback almost vanishes and the residual feedback shifts toward chart values, i.e. what remains to learn is perception rather than answer selection or format.
+
 ## Stage progress
 
 - [x] Stage 0: repository layout, `common.py`, `hub_utils.py`, `prepare.py`, `evaluate.py`, `00_setup_and_eval.ipynb`
 - [x] Stage 1: SFT baseline 0.834 (teacher 0.844, zero-shot 0.668); 80.1% teacher acceptance over 3000 questions
 - [x] Stage 2 code smoke-tested on the A100: 33 s/step at batch 8, peak 27 GB, KL 0.42 -> 0.26 in 20 steps, OPD smoke student 0.792
 - [x] Stage 3: OPD matches full-data SFT with 10% of the questions (+5.8 points over SFT at 300 questions, paired CI excludes 0)
-- [x] Stage 4 code: `analysis/token_feedback.py`, `analysis/token_classes.py`, `analysis/heatmap.py`, `04_token_feedback.ipynb` (Colab run pending)
+- [x] Stage 4: teacher feedback concentrates on the answer line (2.67x) before OPD; after OPD-300 it drops to 0.38x and mean KL halves
 - [ ] Stage 5 (optional): self-distillation (SDPO)
