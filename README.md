@@ -143,6 +143,18 @@ The prompt format works, but the student-teacher gap on the random mix is too sm
 | SFT student, full run (2402 solutions, 302 steps, 2 epochs) | 0.834 | 0.988 |
 | OPD student, smoke run (100 questions, 20 steps, batch 8, reverse KL) | 0.792 | 0.966 |
 
+### Stage 3 data-efficiency curve (2026-09-08, A100, 500 human-written test questions, seed 42)
+
+| Training questions | SFT (302 steps) | OPD (150 steps x batch 16) | OPD - SFT, paired 95% CI |
+|---|---|---|---|
+| 300 (10%) | 0.778 [0.742, 0.814] | 0.836 [0.804, 0.868] | +0.058 [+0.028, +0.088] |
+| 900 (30%) | 0.808 [0.774, 0.842] | 0.820 [0.786, 0.854] | +0.012 [-0.016, +0.040] |
+| 3000 (100%) | 0.834 [0.802, 0.866] | 0.824 [0.790, 0.858] | -0.010 [-0.036, +0.016] |
+| 0 (zero-shot) | 0.668 [0.626, 0.710] | | |
+| teacher 8B | 0.844 [0.812, 0.876] | | |
+
+OPD with 300 questions (10% of the data) matches full-data SFT and sits within noise of the teacher. At 900 and 3000 questions both methods saturate at the teacher ceiling and the paired differences are within noise. Caveats: single seed; the 3000-question OPD run covers each question less than once (2400 rollouts), so it is undertrained relative to SFT's 2 epochs.
+
 Student-teacher gap: 17.6 points. Evaluation of 500 rows takes 12 s (2B) and 36 s (8B) with vLLM on the A100.
 
 ## Stage progress
@@ -150,6 +162,6 @@ Student-teacher gap: 17.6 points. Evaluation of 500 rows takes 12 s (2B) and 36 
 - [x] Stage 0: repository layout, `common.py`, `hub_utils.py`, `prepare.py`, `evaluate.py`, `00_setup_and_eval.ipynb`
 - [x] Stage 1: SFT baseline 0.834 (teacher 0.844, zero-shot 0.668); 80.1% teacher acceptance over 3000 questions
 - [x] Stage 2 code smoke-tested on the A100: 33 s/step at batch 8, peak 27 GB, KL 0.42 -> 0.26 in 20 steps, OPD smoke student 0.792
-- [x] Stage 3 code: `analysis/stats.py`, `analysis/data_efficiency.py`, `03_data_efficiency.ipynb` (Colab runs pending)
+- [x] Stage 3: OPD matches full-data SFT with 10% of the questions (+5.8 points over SFT at 300 questions, paired CI excludes 0)
 - [ ] Stage 4: token-level feedback visualization
 - [ ] Stage 5 (optional): self-distillation (SDPO)
