@@ -41,8 +41,15 @@ this is an afternoon. Then, on any machine with the token:
 python scripts/fetch_results.py            # pulls every result json and figure from the Hub
 ```
 
-Multi-seed aggregation (`analysis/data_efficiency.py` reading seeded file names) is the next code
-step; until then the seeded json files are complete and can be aggregated ad hoc.
+Then aggregate every seed found (notebook-era seed-42 files included):
+
+```bash
+python -m vlm_opd.analysis.data_efficiency --task chartqa_human --budgets 100 300 900 3000
+```
+
+This writes `outputs/data_efficiency_chartqa_human.{json,md,png}` with per-seed accuracies, the
+across-seed mean and standard deviation, a bootstrap interval pooled over questions of all seeds,
+and the OPD minus SFT paired bootstrap computed over the seeds both methods share.
 
 ## Adding a task or an OOD test set
 

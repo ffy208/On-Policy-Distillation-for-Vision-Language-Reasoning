@@ -49,3 +49,40 @@ def test_collect_handles_missing_points(tmp_path):
     assert table["points"][1]["sft"] is None
     assert crossover(table) is None
     assert "pending" in markdown_table(table)
+
+
+def _write_named(path, acc, seed, n=200):
+    rng = np.random.default_rng(seed)
+    recs = [{"id": f"test_{i:05d}", "correct": bool(rng.random() < acc)} for i in range(n)]
+    path.write_text(json.dumps({"records": recs}))
+
+
+def test_find_runs_mixes_legacy_and_seeded(tmp_path):
+    from vlm_opd.analysis.data_efficiency import find_runs
+
+    _write_named(tmp_path / "eval_sft_q300.json", 0.78, 42)                       # notebook-era, seed 42
+    _write_named(tmp_path / "eval_sft_chartqa_human_q300_s1.json", 0.77, 1)
+    _write_named(tmp_path / "eval_opd_chartqa_human_q300_s1.json", 0.83, 1)
+    _write_named(tmp_path / "eval_opd_chartqa_human_q300_s2.json", 0.84, 2)
+    _write_named(tmp_path / "eval_opd_geometry_q300_s1.json", 0.5, 3)              # other task, ignored
+    runs = find_runs(tmp_path, "chartqa_human")
+    assert sorted(runs[("sft", 300)]) == [1, 42]
+    assert sorted(runs[("opd", 300)]) == [1, 2]
+    assert ("opd", 300) in runs and all("geometry" not in str(p) for f in runs.values() for p in f.values())
+
+
+def test_collect_seeded_pools_and_pairs_by_seed(tmp_path):
+    from vlm_opd.analysis.data_efficiency import collect_seeded, markdown_table_seeded
+
+    for s in (1, 2, 3):
+        _write_named(tmp_path / f"eval_sft_chartqa_human_q300_s{s}.json", 0.75, 10 + s)
+        _write_named(tmp_path / f"eval_opd_chartqa_human_q300_s{s}.json", 0.85, 20 + s)
+    _write_named(tmp_path / "eval_sft_chartqa_human_q900_s1.json", 0.80, 31)
+    table = collect_seeded(tmp_path, "chartqa_human", [300, 900], n_boot=300)
+    p300 = table["points"][0]
+    assert p300["sft"]["seeds"] == [1, 2, 3] and p300["sft"]["n"] == 600
+    assert 0.7 < p300["sft"]["accuracy"] < 0.8 and p300["sft"]["std_across_seeds"] >= 0
+    assert p300["opd_minus_sft"]["seeds"] == [1, 2, 3] and p300["opd_minus_sft"]["delta"] > 0.05
+    assert table["points"][1]["opd"] is None and "opd_minus_sft" not in table["points"][1]
+    md = markdown_table_seeded(table)
+    assert "n=3" in md and "over 3 seed(s)" in md and "pending" in md
