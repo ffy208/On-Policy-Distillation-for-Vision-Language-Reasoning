@@ -163,6 +163,7 @@ def opd_step(student, teacher, processor, rows: list[dict[str, Any]], cfg: OPDCo
     n_tokens = gen_mask.sum().clamp_min(1).float()
 
     kl_sum = torch.zeros((), device=device)
+    kl_rows: list[torch.Tensor] = []  # detached per-token KL per row, for the role breakdown
     t_teacher = t_student = 0.0
     for start, end in micro_batches(batch_size, cfg.micro_batch):
         pv, grid = slice_vision(inputs["pixel_values"], inputs["image_grid_thw"], start, end)
@@ -187,6 +188,7 @@ def opd_step(student, teacher, processor, rows: list[dict[str, Any]], cfg: OPDCo
         loss.backward()
         t_student += time.time() - t2
         kl_sum += (kl.detach() * mask).sum()
+        kl_rows.extend((kl.detach() * mask).float().cpu())
         del teacher_logits, student_logits, kl, loss
 
     # Rollout quality signals (no gradient): length, stopping, answer format, correctness vs gold
@@ -196,7 +198,11 @@ def opd_step(student, teacher, processor, rows: list[dict[str, Any]], cfg: OPDCo
     preds = [parse_answer(t) for t in texts]
     golds = [r.get("answer") for r in rows]
     correct = [relaxed_accuracy(p, g) for p, g in zip(preds, golds) if g is not None]
+    role_stats = role_breakdown(tok, sequences[:, prompt_len:], gen_mask, kl_rows)
     return {
+        "role_kl_mass": role_stats["kl_mass"],
+        "role_token_share": role_stats["token_share"],
+        "role_concentration": role_stats["concentration"],
         "kl": (kl_sum / n_tokens).item(),
         "n_gen_tokens": int(n_tokens.item()),
         "gen_len_mean": lengths.float().mean().item(),
@@ -209,6 +215,29 @@ def opd_step(student, teacher, processor, rows: list[dict[str, Any]], cfg: OPDCo
         "t_teacher": round(t_teacher, 2),
         "t_student": round(t_student, 2),
         "sample_output": texts[0][-400:],
+    }
+
+
+def role_breakdown(tok, gen_tokens: torch.Tensor, gen_mask: torch.Tensor, kl_rows: list[torch.Tensor]) -> dict[str, dict[str, float]]:
+    """Share of teacher KL mass and of tokens per token role (answer / arithmetic / chart_value / text) for one batch.
+
+    Uses the same classifier as the Stage 4 analysis so training logs and the offline analysis agree.
+    """
+    from .analysis.token_classes import CLASSES, aggregate
+
+    examples = []
+    for i in range(gen_tokens.shape[0]):
+        ids = gen_tokens[i][gen_mask[i]].tolist()
+        if not ids:
+            continue
+        examples.append({"pieces": [tok.decode([t]) for t in ids], "kl": kl_rows[i][gen_mask[i].cpu()].tolist()})
+    if not examples:
+        return {"kl_mass": {}, "token_share": {}, "concentration": {}}
+    stats = aggregate(examples)["classes"]
+    return {
+        "kl_mass": {c: round(stats[c]["kl_mass_share"], 4) for c in CLASSES},
+        "token_share": {c: round(stats[c]["token_share"], 4) for c in CLASSES},
+        "concentration": {c: round(stats[c]["concentration"], 3) for c in CLASSES},
     }
 
 
@@ -286,9 +315,10 @@ def train(cfg: OPDConfig) -> dict[str, Any]:
         with log_path.open("a") as f:
             f.write(json.dumps(record) + "\n")
         logger.info(
-            "step %d | kl %.4f | len %.0f | eos %.2f | fmt %.2f | acc %s | %.1fs (roll %.1f, teach %.1f, stud %.1f) | mem %s GB",
+            "step %d | kl %.4f | len %.0f | eos %.2f | fmt %.2f | acc %s | answer-KL %s | %.1fs (roll %.1f, teach %.1f, stud %.1f) | mem %s GB",
             step, record["kl"], record["gen_len_mean"], record["eos_rate"], record["format_rate"],
             f"{record['rollout_acc']:.2f}" if record["rollout_acc"] is not None else "n/a",
+            record["role_kl_mass"].get("answer", "n/a"),
             record["t_step"], record["t_rollout"], record["t_teacher"], record["t_student"], record["peak_mem_gb"],
         )
 

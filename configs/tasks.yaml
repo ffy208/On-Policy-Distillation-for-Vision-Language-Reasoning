@@ -1,0 +1,21 @@
+# Task registry for the experiment runner (vlm_opd/experiment.py).
+# One entry per (dataset, question filter). Every task must already be on the Hub in the unified
+# schema {id, image, question, answer} with train/test splits (see prepare.py).
+defaults:
+  hub_user: ffyang
+  result_repo: ffyang/vlm_opd_results
+  student: Qwen/Qwen3-VL-2B-Instruct
+  teacher: Qwen/Qwen3-VL-8B-Instruct
+  sft: {max_steps: 302, lr: 1.0e-4, batch: 4, grad_accum: 4, lora_r: 64}
+  opd: {total_steps: 150, batch_size: 16, micro_batch: 4, lr: 5.0e-5, ckpt_every: 25, kl_direction: reverse}
+  eval: {gpu_mem: 0.85}
+
+tasks:
+  chartqa_human:
+    data_repo: ffyang/vlm_opd_chartqa_human
+    sft_data_repo: ffyang/vlm_opd_sft_human
+    # Results produced by the Colab notebooks (seed 42) used names without task or seed suffixes.
+    legacy_seed: 42
+    legacy_prefix: human
+    # Extra test sets (same schema) every trained model is also scored on; fill in once prepared.
+    ood_eval: []

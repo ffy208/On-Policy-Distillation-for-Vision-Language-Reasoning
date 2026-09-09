@@ -125,6 +125,10 @@ def test_opd_step_runs_and_updates_only_lora(tiny_setup):
     assert 0 <= metrics["gen_len_mean"] <= 6 and metrics["gen_len_max"] <= 6
     assert 0.0 <= metrics["eos_rate"] <= 1.0 and 0.0 <= metrics["format_rate"] <= 1.0
     assert metrics["rollout_acc"] is not None
+    # per-step role breakdown uses the Stage 4 classifier; shares sum to one over the four roles
+    assert set(metrics["role_kl_mass"]) == {"chart_value", "arithmetic", "text", "answer"}
+    assert abs(sum(metrics["role_token_share"].values()) - 1.0) < 1e-2
+    assert all(v >= 0 for v in metrics["role_concentration"].values())
     for name, p in student.named_parameters():
         if p.requires_grad:
             assert p.grad is not None and torch.isfinite(p.grad).all(), name

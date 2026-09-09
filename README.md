@@ -107,6 +107,10 @@ Concentration is the share of total KL mass divided by the share of tokens. Befo
 
 ## Reproducing
 
+### On a Slurm cluster
+
+See [docs/pace.md](docs/pace.md): `slurm/setup_env.sh` once, then one job per point via `slurm/point.sbatch` or a grid via `slurm/sweep.sh`. The OPD trainer now also logs, every step, the share of teacher KL by token role (answer / arithmetic / chart_value / text), so every run produces the feedback-dynamics data for free.
+
 ### Colab notebooks
 
 Open from GitHub (Colab keeps its own copy, so reopen after every push that touches a notebook). Each notebook is generated from `notebooks/build_*.py`; edit the script, not the JSON.
@@ -169,9 +173,13 @@ vlm_opd/
   analysis/token_feedback.py   student rollouts scored by both models: per-token reverse KL and log-ratio
   analysis/token_classes.py    token roles, per-class aggregation, digit-position statistics
   analysis/heatmap.py          token heatmap and per-class bar chart rendering
+  experiment.py     one (task, method, budget, seed) point end to end, idempotent against the Hub results repo
 notebooks/          00 to 04 (Colab drivers) and the build_*.py scripts that generate them
+slurm/              PACE / Slurm setup, single-point job, and sweep scripts (see docs/pace.md)
 configs/            yaml configs per stage
 docs/resume_log.md  measurable results per stage in XYZ form
+docs/research_plan.md paper direction, collision check, experiment plan
+docs/pace.md        running the sweep on a Slurm cluster
 tests/              offline unit tests
 ```
 

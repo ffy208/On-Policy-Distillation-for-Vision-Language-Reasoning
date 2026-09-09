@@ -33,3 +33,6 @@ outputs/**/*.jsonl
 # Claude Code session logs
 .claude/logs/
 .claude/session-context-*.md
+
+# Slurm / experiment logs
+logs/
