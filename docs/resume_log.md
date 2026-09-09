@@ -70,8 +70,20 @@ Stage 4, token-level feedback analysis
 Stage 5 (optional), self-distillation
 - Accuracy, mean output length over training, and whether length collapse occurs (length at step 0 vs final).
 
-## Resume bullets (draft, update when numbers are final)
+## Resume bullets (final, 2026-09-09)
 
-- Built an on-policy distillation pipeline for vision-language models (Qwen3-VL 2B student, 8B teacher) on ChartQA that raised student accuracy from 0.668 to 0.836 on 500 held-out human-written questions with only 300 training questions, beating supervised distillation on the same questions by 5.8 points (paired 95% CI +2.8 to +8.8).
-- Showed that on-policy distillation matches full-data supervised distillation (0.834 on 3000 questions) with 10% of the training questions, replicating the data-efficiency result of Agarwal et al. in the vision-language setting.
-- Measured where token-level teacher feedback lands: the final-answer line receives 2.7x its length share of KL from the teacher before training, and on-policy distillation removes that gap (0.38x) while halving mean per-token KL, leaving chart-reading numbers as the main residual error source.
+Header line:
+
+**On-Policy Distillation for Vision-Language Reasoning** — Independent research, Sept 2026. Python, PyTorch, transformers, PEFT/LoRA, vLLM, HuggingFace Hub. Code: https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning · Page: https://ffy208.github.io/On-Policy-Distillation-for-Vision-Language-Reasoning/
+
+Research-facing bullets:
+
+- Built an on-policy distillation pipeline for a vision-language model (Qwen3-VL 2B student, 8B teacher) on ChartQA, training a LoRA student on full-vocabulary per-token KL to the teacher over the student's own sampled rollouts, with Hub-checkpointed, disconnect-safe training on a single 40 GB A100.
+- Raised student accuracy from 0.668 to 0.836 on 500 held-out human-written questions using only 300 training questions, matching supervised distillation trained on 3,000 (0.834) and beating it by 5.8 points at equal data (paired bootstrap 95% CI +2.8 to +8.8).
+- Showed with a token-level analysis of 21K generated tokens that the teacher's feedback concentrates on the final-answer line (2.7x its token share) rather than chart-reading digits (0.4x), and that OPD closes that gap (0.4x) while halving mean per-token KL, independently corroborating the motivation of 2026 visual re-weighting methods.
+
+Engineering-facing alternative for the third bullet:
+
+- Cut evaluation to 12 s per 500 questions with vLLM (versus a planned 5 min), profiled rollout as 90% of OPD step time and doubled throughput at constant 27 GB by scaling the rollout batch, and shipped 1.5K lines of tested Python (53 CPU tests, CI) with restart-safe Colab notebooks.
+
+Guidance: describe it as independent research and a replication plus one measurement, never as a paper; be ready to explain every number (0.668 zero-shot, 0.834 full-data SFT, 0.836 OPD-300, 0.844 teacher, +5.8 paired delta) and to state the single-seed limitation unprompted; if space is tight keep the second bullet.
