@@ -153,12 +153,29 @@ for r in base:
                                     title=f"OPD-300 student | {r['id']} | gold={match['gold']} pred={match['pred']} | same colour scale", vmax=vmax)
         display(IPImage(str(png2))); hub_utils.upload_small_file(png2, RESULT_REPO, token=token)"""),
 
+md("## 4b. Digit-position breakdown\n\nNumbers are tokenized digit by digit. This compares the KL on the first token of each number with its later tokens."),
+
+code("""from vlm_opd.analysis.token_classes import digit_position_stats
+digit_stats = {}
+for name in STUDENTS:
+    recs = [json.loads(l) for l in (OUT_DIR / f"token_feedback_{name}.jsonl").read_text().splitlines()]
+    d = digit_position_stats(recs); digit_stats[name] = d
+    print(f"{name}: {d['numbers']} numbers | first-token KL {d['first_token_kl_mean']:.3f} vs later {d['later_token_kl_mean']:.3f} "
+          f"(ratio {d['first_to_later_ratio']:.1f}x) | first tokens are {d['first_token_share']:.0%} of number tokens but carry "
+          f"{d['first_token_mass_share']:.0%} of number KL")
+(OUT_DIR / "digit_position_stats.json").write_text(json.dumps(digit_stats, indent=2))
+hub_utils.upload_small_file(OUT_DIR / "digit_position_stats.json", RESULT_REPO, token=token)
+for name in STUDENTS:  # keep the raw per-token records too; they are small
+    hub_utils.upload_small_file(OUT_DIR / f"token_feedback_{name}.jsonl", RESULT_REPO, token=token)"""),
+
 md("## 5. Summary"),
 
 code("""summary = {}
 for name in STUDENTS:
     s = json.loads((OUT_DIR / f"token_feedback_{name}.stats.json").read_text())
     summary[name] = {"mean_kl_per_token": s["mean_kl_per_token"], "rollout_accuracy": s["rollout_accuracy"], "n_tokens": s["n_tokens"],
+                     "digit_first_to_later_ratio": digit_stats[name]["first_to_later_ratio"],
+                     "digit_first_token_mass_share": digit_stats[name]["first_token_mass_share"],
                      **{f"{c}_concentration": s["classes"][c]["concentration"] for c in CLASSES},
                      **{f"{c}_kl_mass_share": s["classes"][c]["kl_mass_share"] for c in CLASSES}}
 print(json.dumps(summary, indent=2))

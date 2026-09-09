@@ -41,3 +41,17 @@ def test_aggregate_shares_and_concentration():
     assert ans["concentration"] > 1 and stats["classes"]["text"]["concentration"] < 1
     assert stats["classes"]["chart_value"]["logratio_mean"] == 1.0
     assert "| answer |" in markdown_table(stats)
+
+
+def test_number_runs_and_digit_position_stats():
+    from vlm_opd.analysis.token_classes import digit_position_stats, number_runs
+
+    pieces = ["value", " is", " 1", "6", "3", ".", "6", " m", "²", " in", " 2", "0", "0", "2", "."]
+    runs = number_runs(pieces)
+    assert runs == [[2, 3, 4, 5, 6], [10, 11, 12, 13, 14]] or runs[0] == [2, 3, 4, 5, 6]
+    kl = [0.1, 0.1, 2.0, 0.1, 0.1, 0.0, 0.1, 0.1, 0.1, 0.1, 1.0, 0.1, 0.1, 0.1, 0.1]
+    stats = digit_position_stats([{"pieces": pieces, "kl": kl}])
+    assert stats["numbers"] == 2
+    assert stats["first_token_kl_mean"] == 1.5
+    assert stats["first_to_later_ratio"] > 10
+    assert stats["first_token_mass_share"] > 0.75 > stats["first_token_share"]

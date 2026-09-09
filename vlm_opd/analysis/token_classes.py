@@ -114,3 +114,48 @@ def markdown_table(stats: dict[str, Any]) -> str:
         r = stats["classes"][c]
         lines.append(f"| {c} | {r['n_tokens']} | {r['token_share']:.1%} | {r['kl_mass_share']:.1%} | {r['kl_mean']:.3f} | {r['concentration']:.2f} |")
     return "\n".join(lines)
+
+
+_NUMERIC_PIECE = re.compile(r"^[\s\d.,%$~]+$")
+
+
+def number_runs(pieces: list[str]) -> list[list[int]]:
+    """Indices of maximal runs of numeric token pieces that contain at least one digit (one run per number)."""
+    runs: list[list[int]] = []
+    cur: list[int] = []
+    for i, p in enumerate(pieces):
+        if _NUMERIC_PIECE.match(p) and p.strip():
+            cur.append(i)
+        else:
+            if any(_DIGIT.search(pieces[j]) for j in cur):
+                runs.append(cur)
+            cur = []
+    if any(_DIGIT.search(pieces[j]) for j in cur):
+        runs.append(cur)
+    return runs
+
+
+def digit_position_stats(examples: list[dict[str, Any]]) -> dict[str, Any]:
+    """Mean KL on the first token of each number versus its later tokens, and the share of a number's KL on its first token.
+
+    Numbers are tokenized digit by digit; if the disagreement sits on the first digit, per-token averages
+    understate number-level feedback. `first_token_mass_share` is the fraction of all number-KL that lands on
+    first tokens, to be compared with `first_token_share` (their fraction of number tokens).
+    """
+    first_sum = first_n = later_sum = later_n = 0.0
+    numbers = 0
+    for ex in examples:
+        for run in number_runs(ex["pieces"]):
+            numbers += 1
+            first_sum += float(ex["kl"][run[0]]); first_n += 1
+            for j in run[1:]:
+                later_sum += float(ex["kl"][j]); later_n += 1
+    total = first_sum + later_sum
+    return {
+        "numbers": numbers,
+        "first_token_kl_mean": first_sum / first_n if first_n else 0.0,
+        "later_token_kl_mean": later_sum / later_n if later_n else 0.0,
+        "first_to_later_ratio": (first_sum / first_n) / (later_sum / later_n) if first_n and later_n and later_sum else 0.0,
+        "first_token_share": first_n / (first_n + later_n) if first_n + later_n else 0.0,
+        "first_token_mass_share": first_sum / total if total else 0.0,
+    }
