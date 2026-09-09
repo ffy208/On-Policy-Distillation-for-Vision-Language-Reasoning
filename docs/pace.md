@@ -15,8 +15,8 @@ echo 'hf_...' > ~/.hf_token && chmod 600 ~/.hf_token
 ```
 
 The scripts load `python/3.12.5` and `cuda/12.6.1` (present on PACE ICE) and submit to the `ice-gpu`
-partition with `--gres=gpu:A100:1`; verify with `sinfo -o "%P %G %D" | grep -i gpu` and
-`pace-check-queue ice-gpu`, and switch to `gpu:H100:1` when you need 80 GB. ICE needs no account
+partition with `--gres=gpu:h100:1` (GRES names are lowercase on ICE; `sinfo -o "%P %G %D" | grep ice-gpu`
+shows 48 H100, 48 H200, 8 A100). H100/H200 have 80 GB, enough for the 32B teacher. ICE needs no account
 line. Always `sbatch` from the repository root: the job uses `SLURM_SUBMIT_DIR` to find the code.
 Set `SCRATCH` and `HF_HOME` in `~/.bashrc` so models download to scratch, not to the home quota:
 

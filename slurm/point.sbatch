@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH -p ice-gpu               # PACE ICE GPU partition; verify with `sinfo -o "%P %G %D" | grep -i gpu`
-#SBATCH --gres=gpu:A100:1        # or gpu:H100:1 (80 GB, needed for the 32B teacher); ICE needs no -A account line
+#SBATCH --gres=gpu:h100:1        # lowercase on ICE; alternatives: gpu:a100:1 (40 GB, only 8 cards), gpu:h200:1. No -A line needed
 #SBATCH -t 04:00:00
 #SBATCH -o logs/%x-%j.out
 set -euo pipefail
