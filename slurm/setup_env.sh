@@ -10,7 +10,9 @@ export HF_HOME="${HF_HOME:-${SCRATCH:-$HOME/scratch}/hf_cache}"   # models and d
 module load python/3.12.5 2>/dev/null || module load python 2>/dev/null || true
 module load cuda/12.6.1 2>/dev/null || module load cuda 2>/dev/null || true
 
+export PATH="$HOME/.local/bin:$PATH"          # where `pip install --user` puts console scripts
 command -v uv >/dev/null 2>&1 || pip install --user uv
+command -v uv >/dev/null 2>&1 || uv() { python3 -m uv "$@"; }   # fall back to the module form
 uv venv "$ENV_DIR" --python 3.12
 # shellcheck disable=SC1091
 source "$ENV_DIR/bin/activate"
