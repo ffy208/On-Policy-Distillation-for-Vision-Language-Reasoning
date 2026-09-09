@@ -34,6 +34,8 @@ Three claims, each with a controlled experiment:
 - *Robustness under shift.* OPD's advantage over SFT grows out of distribution. Train on ChartQA human questions; evaluate on held-out chart benchmarks (ChartQA-Pro / CharXiv / PlotQA / ChartBench subsets) with the same scorer. Prediction from theory: SFT overfits teacher traces on the training distribution; OPD trains on student-reached states and degrades less.
 - *Feedback dynamics.* Log the teacher's KL by token role at every step. Hypothesis: answer and format disagreement collapse within the first tens of steps, perception (chart values, first digits of numbers) is the persistent residual, and the residual's share predicts the remaining gap to the teacher. This gives the re-weighting papers a *when*, not just a *where*.
 
+A fourth, cheap axis: *teacher size*. Teacher forwards are gradient-free, so a 32B teacher adds about 3 s per step. Three teacher sizes at one budget turn the study from "small models only" into a capacity-gap measurement (does the 2B student keep gaining, saturate, or lose with a larger teacher, and where does each teacher's feedback land), which is the question FP-OPD and SOD raise. Findings stay stated at this scale; that is the norm for the literature (VA-OPD 4B/8B/32B teachers, FP-OPD 8B to 2B, RP-OPSD 9B).
+
 Positioning: complementary to VA-OPD / VGS / FP-OPD. They change the objective; this paper characterizes the regime of the plain objective and shows what the modified objectives are needed for. Fits a rigorous empirical venue.
 
 **B. A cheap method riding on A's finding.** Role-aware or first-digit-aware KL weighting (upweight `chart_value` tokens and the first token of each number). Zero extra forwards, unlike VA-OPD. Only worth writing up if it closes a measurable part of the perception residual; otherwise it is an ablation inside A.
@@ -53,7 +55,8 @@ Reuse everything in this repository; the additions are data adapters, OOD evalua
 | OOD evaluation of every model on 3 to 4 held-out chart benchmarks | evaluation only | 6 |
 | Feedback dynamics: per-step role-KL logging (free), plus token-feedback analysis at 5 checkpoints per run for 6 runs | analysis | 4 |
 | Method B ablation on ChartQA at 300 questions, 3 seeds | 3 OPD | 6 |
-| **Total** | | **~75 to 90** |
+| Teacher-size axis on ChartQA at 300 questions, 2B student, teachers 4B and 32B (8B exists), 3 seeds each; 32B needs an 80 GB GPU or two 40 GB cards (`device_map="auto"`) | 6 OPD | 15 |
+| **Total** | | **~90 to 105** |
 
 Colab Pro units do not cover this. Options: Georgia Tech PACE (already used for the Soccer-Twos project), or rented A100s (~$1.5 to 2 per hour, so roughly $150 to $200). PACE is the obvious choice; the code is notebook-independent (every stage is a `python -m vlm_opd.*` command) so it moves to a Slurm script directly.
 
