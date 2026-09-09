@@ -1,6 +1,10 @@
 # On-Policy Distillation for Vision-Language Reasoning
 
-On-policy distillation (OPD) transferred from text-only LLMs to a vision-language model, compared against supervised distillation (SFT) on ChartQA, with a token-level analysis of where the teacher's feedback lands.
+[![tests](https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/actions/workflows/ci.yml/badge.svg)](https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/actions/workflows/ci.yml)
+[![project page](https://img.shields.io/badge/project%20page-ffy208.github.io-9b2226)](https://ffy208.github.io/On-Policy-Distillation-for-Vision-Language-Reasoning/)
+[![license](https://img.shields.io/badge/license-MIT-black)](LICENSE)
+
+On-policy distillation (OPD) transferred from text-only LLMs to a vision-language model, compared against supervised distillation (SFT) on ChartQA, with a token-level analysis of where the teacher's feedback lands. Project page with figures: https://ffy208.github.io/On-Policy-Distillation-for-Vision-Language-Reasoning/
 
 Student: `Qwen/Qwen3-VL-2B-Instruct` (LoRA rank 64 on the language model, vision tower frozen). Teacher: `Qwen/Qwen3-VL-8B-Instruct`. Task: ChartQA, human-written questions, 3000 train / 500 test, one Colab A100 40 GB.
 
@@ -41,6 +45,8 @@ All numbers come from the json files in the private Hub repo `ffyang/vlm_opd_res
 
 ### Data-efficiency curve (2026-09-08, seed 42, 500 human-written test questions)
 
+![Accuracy versus training questions for SFT and OPD with bootstrap intervals](docs/assets/data_efficiency.png)
+
 | Training questions | SFT (302 steps) | OPD (150 steps x batch 16) | OPD - SFT, paired 95% CI |
 |---|---|---|---|
 | 300 (10%) | 0.778 [0.742, 0.814] | 0.836 [0.804, 0.868] | +0.058 [+0.028, +0.088] |
@@ -58,6 +64,9 @@ Update counts are fixed across budgets so data quantity is the only variable: SF
 | chart_value | 7.4% -> 2.9% (0.39x) | 0.73x |
 | arithmetic | 10.5% -> 3.7% (0.36x) | 0.42x |
 | mean KL per token | 0.489 | 0.235 |
+
+![Teacher feedback by token class, zero-shot student](docs/assets/token_classes_baseline.png)
+![Teacher feedback by token class, OPD-300 student](docs/assets/token_classes_opd_q300.png)
 
 Concentration is the share of total KL mass divided by the share of tokens. Before training the teacher's feedback concentrates on the final answer and on discourse and format tokens, not on chart-reading digits. Two things explain the low value for digits: both models condition on the same image, and numbers are tokenized digit by digit with the disagreement sitting on the first digit of each number, which per-token averaging dilutes (the heatmaps show this directly). After OPD the answer-line feedback almost vanishes, the student adopts the teacher's `Step N:` format, and the residual feedback shifts toward chart values, i.e. what remains to learn is perception rather than answer selection or format. Token roles are heuristic; the `text` class mixes structural and reasoning tokens.
 
@@ -176,6 +185,21 @@ Three preinstalled-package conflicts and one API change were needed to run vLLM 
 - transformers 5 removed `warmup_ratio` from `TrainingArguments`; `sft.build_training_args` passes the ratio through `warmup_steps` on that API.
 
 Verified assumptions (2026-09-07): `HuggingFaceM4/ChartQA` has fields `image / query / label(list[str]) / human_or_machine` with 28299 train and 2500 test rows. The Qwen3-VL processor uses patch 16 and merge 2, so one visual token covers 32x32 pixels, and both transformers and vLLM accept `min_pixels` / `max_pixels`.
+
+## Related work (2026)
+
+OPD for LLMs: MiniLLM and GKD (Agarwal et al., 2024); Thinking Machines' 2025 write-up; [Rethinking OPD](https://arxiv.org/html/2604.13016v1) frames it as dense KL-constrained RL. OPD for VLMs became an active thread in 2026: [VOLD](https://arxiv.org/abs/2510.23497), [Visual-Advantage OPD](https://arxiv.org/abs/2605.21924), [Decomposed OPD / Visual Gradient Steering](https://arxiv.org/abs/2606.00564), [Fisher-Projected OPD](https://arxiv.org/abs/2608.01263), [H-OPD](https://arxiv.org/pdf/2607.02592), and [PTD-PO](https://arxiv.org/html/2606.07000v1). This repository is a small, fully reproducible replication; its Stage 4 measurement (vanilla OPD's feedback concentrates on the answer line and format, with chart-value tokens at 0.39x) independently corroborates the premise of the re-weighting papers. [Near-Policy Distillation](https://arxiv.org/pdf/2605.05940) targets the rollout bottleneck measured here.
+
+## Citation
+
+```bibtex
+@misc{yang2026vlmopd,
+  author = {Frank Yang},
+  title  = {On-Policy Distillation for Vision-Language Reasoning},
+  year   = {2026},
+  url    = {https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning}
+}
+```
 
 ## Status and possible follow-ups
 

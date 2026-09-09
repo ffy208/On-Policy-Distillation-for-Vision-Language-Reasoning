@@ -90,6 +90,8 @@ def plot(table: dict[str, Any], out_png: str | Path) -> Path:
     ax.set_xscale("log")
     ax.set_xticks([p["budget"] for p in table["points"]])
     ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax.get_xaxis().set_minor_formatter(matplotlib.ticker.NullFormatter())
+    ax.set_xticks([p["budget"] for p in table["points"]], [str(p["budget"]) for p in table["points"]])
     ax.set_xlabel("training questions")
     ax.set_ylabel("relaxed accuracy (500 test questions)")
     ax.legend(fontsize=8)
