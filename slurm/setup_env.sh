@@ -7,8 +7,8 @@ REPO_DIR="${REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"   # the
 ENV_DIR="${ENV_DIR:-$HOME/vlm_opd_env}"
 export HF_HOME="${HF_HOME:-${SCRATCH:-$HOME/scratch}/hf_cache}"   # models and datasets go to scratch, not home quota
 
-module load python/3.12 2>/dev/null || module load python 2>/dev/null || true
-module load cuda/12.8 2>/dev/null || module load cuda 2>/dev/null || true
+module load python/3.12.5 2>/dev/null || module load python 2>/dev/null || true
+module load cuda/12.6.1 2>/dev/null || module load cuda 2>/dev/null || true
 
 command -v uv >/dev/null 2>&1 || pip install --user uv
 uv venv "$ENV_DIR" --python 3.12

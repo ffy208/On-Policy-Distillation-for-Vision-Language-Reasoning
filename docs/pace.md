@@ -14,10 +14,16 @@ bash slurm/setup_env.sh                 # uv venv + vllm/transformers/peft; HF_H
 echo 'hf_...' > ~/.hf_token && chmod 600 ~/.hf_token
 ```
 
-Check the module names (`module avail python cuda`), the GPU partition and GRES names
-(`sinfo -o "%P %G"`; on PACE ICE the GPU partition is typically `ice-gpu`), and edit the commented
-`#SBATCH` lines in `slurm/point.sbatch`. Always `sbatch` from the repository root: the job uses
-`SLURM_SUBMIT_DIR` to find the code.
+The scripts load `python/3.12.5` and `cuda/12.6.1` (present on PACE ICE) and submit to the `ice-gpu`
+partition with `--gres=gpu:A100:1`; verify with `sinfo -o "%P %G %D" | grep -i gpu` and
+`pace-check-queue ice-gpu`, and switch to `gpu:H100:1` when you need 80 GB. ICE needs no account
+line. Always `sbatch` from the repository root: the job uses `SLURM_SUBMIT_DIR` to find the code.
+Set `SCRATCH` and `HF_HOME` in `~/.bashrc` so models download to scratch, not to the home quota:
+
+```bash
+export SCRATCH=/storage/ice1/<path>/<user>
+export HF_HOME=$SCRATCH/hf_cache
+```
 
 ## Smoke test (about 15 minutes on one A100)
 

@@ -7,11 +7,10 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --gres=gpu:A100:1        # on PACE ICE check `sinfo -o "%P %G"`; H100 nodes also work (80 GB fits the 32B teacher)
+#SBATCH -p ice-gpu               # PACE ICE GPU partition; verify with `sinfo -o "%P %G %D" | grep -i gpu`
+#SBATCH --gres=gpu:A100:1        # or gpu:H100:1 (80 GB, needed for the 32B teacher); ICE needs no -A account line
 #SBATCH -t 04:00:00
 #SBATCH -o logs/%x-%j.out
-##SBATCH -A <your-account>      # uncomment and fill if your allocation requires it
-##SBATCH -p <gpu-partition>     # e.g. the A100 partition name from `pace-check-queue`
 set -euo pipefail
 
 : "${TASK:?set TASK}"; : "${METHOD:?set METHOD}"; : "${BUDGET:?set BUDGET}"; : "${SEED:=42}"
@@ -21,7 +20,7 @@ export HF_HOME="${HF_HOME:-${SCRATCH:-$HOME/scratch}/hf_cache}"
 export HF_TOKEN="$(cat "$HOME/.hf_token")"
 export TOKENIZERS_PARALLELISM=false
 
-module load cuda/12.8 2>/dev/null || module load cuda 2>/dev/null || true
+module load cuda/12.6.1 2>/dev/null || module load cuda 2>/dev/null || true
 # shellcheck disable=SC1091
 source "$ENV_DIR/bin/activate"
 cd "$REPO_DIR"
