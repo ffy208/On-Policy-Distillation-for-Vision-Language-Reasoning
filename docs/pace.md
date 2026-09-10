@@ -73,10 +73,12 @@ and the OPD minus SFT paired bootstrap computed over the seeds both methods shar
 ## Bad GPUs
 
 One L40S on `atl1-1-03-004-23-0` raised `cudaErrorECCUncorrectable` at device setup and killed four jobs
-across two submissions (2026-09-10). Every job script now touches the GPU first; if that fails, the job adds
-its node to its own `ExcNodeList`, requeues itself (`--requeue`), and exits 0, so the point simply starts
-again elsewhere (OPD resumes from its Hub checkpoint). To exclude a node by hand for a whole sweep:
-`export SBATCH_EXCLUDE=<node>` before `slurm/sweep.sh`. Report the node to pace-support@oit.gatech.edu.
+across two submissions (2026-09-10). Every job script now touches the GPU first; if that fails, the job
+records its node in `logs/bad_nodes.txt`, submits a fresh copy of itself with `--exclude` covering every
+recorded node, and exits 0, so the point simply starts again elsewhere (OPD resumes from its Hub checkpoint).
+`slurm/sweep.sh` passes the same exclusion list up front. (Requeueing does not work for this: users cannot
+edit a job's `ExcNodeList`, so a requeued job goes straight back to the same card; one job looped 19 times.)
+Report bad nodes to pace-support@oit.gatech.edu.
 
 ## What goes to the Hub
 

@@ -7,7 +7,9 @@ BUDGETS="${2:-100 300 900 3000}"
 SEEDS="${3:-42}"
 METHODS="${4:-sft opd}"
 GPU="${GPU:-l40s}"     # GPU=a100 slurm/sweep.sh ... to use the (smaller) A100 pool instead
+# Nodes whose GPU failed the health check in an earlier job (written by point.sbatch) are excluded up front.
+EXCLUDE=""; [ -s logs/bad_nodes.txt ] && EXCLUDE="--exclude=$(paste -sd, logs/bad_nodes.txt)"
 for b in $BUDGETS; do for s in $SEEDS; do for m in $METHODS; do
   t=$([ "$m" = "opd" ] && echo "02:30:00" || echo "01:00:00")
-  sbatch -t "$t" --gres="gpu:${GPU}:1" -J "${m}_${TASK}_q${b}_s${s}" --export=ALL,TASK="$TASK",METHOD="$m",BUDGET="$b",SEED="$s" slurm/point.sbatch
+  sbatch $EXCLUDE -t "$t" --gres="gpu:${GPU}:1" -J "${m}_${TASK}_q${b}_s${s}" --export=ALL,TASK="$TASK",METHOD="$m",BUDGET="$b",SEED="$s" slurm/point.sbatch
 done; done; done
