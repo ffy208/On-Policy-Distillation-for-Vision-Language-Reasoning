@@ -25,7 +25,9 @@ import torch.nn.functional as F
 
 from ..collate import END_OF_TURN
 from ..common import (
+    DEFAULT_PROMPT_STYLE,
     DEFAULT_SEED,
+    PROMPT_STYLES,
     STUDENT_MODEL,
     TEACHER_MODEL,
     get_hf_token,
@@ -58,14 +60,14 @@ def _load(model_id: str, token: str | None):
 
 @torch.no_grad()
 def score_batch(student, teacher, processor, rows: list[dict[str, Any]], max_new_tokens: int, temperature: float,
-                seed: int, micro: int) -> list[dict[str, Any]]:
+                seed: int, micro: int, prompt_style: str = DEFAULT_PROMPT_STYLE) -> list[dict[str, Any]]:
     """Sample one rollout per row with the student, then score every generated token with both models."""
     device = next(student.parameters()).device
     dtype = next(teacher.parameters()).dtype
     tok = processor.tokenizer
     pad_id, eos_id = tok.pad_token_id, tok.convert_tokens_to_ids(END_OF_TURN)
 
-    inputs = {k: v.to(device) for k, v in build_rollout_inputs(processor, rows).items()}
+    inputs = {k: v.to(device) for k, v in build_rollout_inputs(processor, rows, prompt_style).items()}
     inputs["pixel_values"] = inputs["pixel_values"].to(dtype)
     batch_size, prompt_len = inputs["input_ids"].shape
     torch.manual_seed(seed)
@@ -120,7 +122,7 @@ def score_batch(student, teacher, processor, rows: list[dict[str, Any]], max_new
 
 def run(student_id: str, teacher_id: str, data_repo: str, n: int, out_path: str | Path, split: str = "test",
         batch_size: int = 8, micro: int = 4, max_new_tokens: int = 512, temperature: float = 1.0,
-        seed: int = DEFAULT_SEED) -> dict[str, Any]:
+        seed: int = DEFAULT_SEED, prompt_style: str = DEFAULT_PROMPT_STYLE) -> dict[str, Any]:
     """Score the first `n` questions of a split and write per-token records (jsonl) plus class statistics (json)."""
     from transformers import AutoProcessor
 
@@ -137,7 +139,8 @@ def run(student_id: str, teacher_id: str, data_repo: str, n: int, out_path: str 
     with out_path.open("w") as f:
         for start in range(0, len(ds), batch_size):
             rows = [ds[i] for i in range(start, min(start + batch_size, len(ds)))]
-            batch = score_batch(student, teacher, processor, rows, max_new_tokens, temperature, seed + start, micro)
+            batch = score_batch(student, teacher, processor, rows, max_new_tokens, temperature, seed + start, micro,
+                                prompt_style)
             for r in batch:
                 f.write(json.dumps(r) + "\n")
             records.extend(batch)
@@ -145,7 +148,7 @@ def run(student_id: str, teacher_id: str, data_repo: str, n: int, out_path: str 
 
     stats = aggregate(records)
     stats.update({"student": student_id, "teacher": teacher_id, "data_repo": data_repo, "split": split, "n_questions": len(records),
-                  "temperature": temperature, "seed": seed,
+                  "temperature": temperature, "seed": seed, "prompt_style": prompt_style,
                   "rollout_accuracy": sum(r["correct"] for r in records) / max(1, len(records)),
                   "mean_kl_per_token": stats["kl_total"] / max(1, stats["n_tokens"])})
     stats_path = out_path.with_suffix(".stats.json")
@@ -167,10 +170,11 @@ def main() -> None:
     parser.add_argument("--max-new-tokens", type=int, default=512)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument("--prompt-style", type=str, default=DEFAULT_PROMPT_STYLE, choices=PROMPT_STYLES)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     run(args.student, args.teacher, args.data_repo, args.n, args.out, args.split, args.batch_size, args.micro_batch,
-        args.max_new_tokens, args.temperature, args.seed)
+        args.max_new_tokens, args.temperature, args.seed, args.prompt_style)
 
 
 if __name__ == "__main__":

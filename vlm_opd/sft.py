@@ -19,7 +19,15 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .common import DEFAULT_SEED, STUDENT_MODEL, get_hf_token, image_pixel_bounds, load_hub_dataset
+from .common import (
+    DEFAULT_PROMPT_STYLE,
+    DEFAULT_SEED,
+    PROMPT_STYLES,
+    STUDENT_MODEL,
+    get_hf_token,
+    image_pixel_bounds,
+    load_hub_dataset,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +110,7 @@ def train_sft(
     seed: int = DEFAULT_SEED,
     max_steps: int = -1,
     logging_steps: int = 10,
+    prompt_style: str = DEFAULT_PROMPT_STYLE,
 ) -> dict[str, Any]:
     """Run LoRA SFT and save the adapter to `out_dir/adapter`. Returns training metrics."""
     from transformers import AutoProcessor, Trainer, set_seed
@@ -126,7 +135,7 @@ def train_sft(
         model=model,
         args=args,
         train_dataset=dataset,
-        data_collator=SFTCollator(processor, max_length=max_length),
+        data_collator=SFTCollator(processor, max_length=max_length, prompt_style=prompt_style),
     )
     t0 = time.time()
     result = trainer.train()
@@ -143,6 +152,7 @@ def train_sft(
         "learning_rate": learning_rate,
         "effective_batch_size": per_device_batch_size * grad_accum,
         "lora_r": lora_r,
+        "prompt_style": prompt_style,
         "trainable_params": summary["trainable"],
         "train_loss": result.training_loss,
         "global_steps": result.global_step,
@@ -201,6 +211,7 @@ def main() -> None:
                         help="Data budget in questions: keep rows whose question index is below N")
     parser.add_argument("--push-adapter-repo", type=str, default=None)
     parser.add_argument("--push-merged-repo", type=str, default=None, help="Also merge LoRA into the base and push")
+    parser.add_argument("--prompt-style", type=str, default=DEFAULT_PROMPT_STYLE, choices=PROMPT_STYLES)
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -211,7 +222,7 @@ def main() -> None:
     logger.info("Training rows: %d", len(ds))
     train_sft(
         ds, args.out_dir, args.model, args.epochs, args.lr, args.batch, args.grad_accum,
-        args.lora_r, args.max_length, seed=args.seed, max_steps=args.max_steps,
+        args.lora_r, args.max_length, seed=args.seed, max_steps=args.max_steps, prompt_style=args.prompt_style,
     )
     adapter_dir = Path(args.out_dir) / "adapter"
     if args.push_adapter_repo:

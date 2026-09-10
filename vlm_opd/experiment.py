@@ -77,14 +77,15 @@ def train_command(method: str, names: PointNames, task_cfg: dict[str, Any], defa
                   student: str, teacher: str, sft_steps: int | None, opd_steps: int | None) -> list[str]:
     """argv for the training module of one point."""
     py = sys.executable
+    style = ["--prompt-style", task_cfg.get("prompt_style", "chart")]
     if method == "sft":
         c = defaults["sft"]
-        return [py, "-m", "vlm_opd.sft", "--data-repo", task_cfg["sft_data_repo"], "--out-dir", names.out_dir,
+        return [py, "-m", "vlm_opd.sft", *style, "--data-repo", task_cfg["sft_data_repo"], "--out-dir", names.out_dir,
                 "--model", student, "--max-question-index", str(budget), "--max-steps", str(sft_steps or c["max_steps"]),
                 "--lr", str(c["lr"]), "--batch", str(c["batch"]), "--grad-accum", str(c["grad_accum"]),
                 "--lora-r", str(c["lora_r"]), "--seed", str(seed), "--push-merged-repo", names.merged_repo]
     c = defaults["opd"]
-    return [py, "-m", "vlm_opd.opd_trainer", "--data-repo", task_cfg["data_repo"], "--out-dir", names.out_dir,
+    return [py, "-m", "vlm_opd.opd_trainer", *style, "--data-repo", task_cfg["data_repo"], "--out-dir", names.out_dir,
             "--student", student, "--teacher", teacher, "--limit", str(budget),
             "--total-steps", str(opd_steps or c["total_steps"]), "--batch-size", str(c["batch_size"]),
             "--micro-batch", str(c["micro_batch"]), "--lr", str(c["lr"]), "--ckpt-every", str(c["ckpt_every"]),
@@ -92,9 +93,11 @@ def train_command(method: str, names: PointNames, task_cfg: dict[str, Any], defa
             "--ckpt-repo", names.ckpt_repo or "", "--merged-repo", names.merged_repo]
 
 
-def eval_command(model_repo: str, data_repo: str, out_path: str | Path, tag: str, seed: int, gpu_mem: float) -> list[str]:
-    return [sys.executable, "-m", "vlm_opd.evaluate", "--model", model_repo, "--data-repo", data_repo, "--split", "test",
-            "--out", str(out_path), "--tag", tag, "--seed", str(seed), "--gpu-mem", str(gpu_mem)]
+def eval_command(model_repo: str, data_repo: str, out_path: str | Path, tag: str, seed: int, gpu_mem: float,
+                 prompt_style: str = "chart") -> list[str]:
+    return [sys.executable, "-m", "vlm_opd.evaluate", "--prompt-style", prompt_style, "--model", model_repo,
+            "--data-repo", data_repo, "--split", "test", "--out", str(out_path), "--tag", tag, "--seed", str(seed),
+            "--gpu-mem", str(gpu_mem)]
 
 
 def result_on_hub(result_repo: str, name: str, token: str | None) -> bool:
@@ -157,7 +160,8 @@ def run_point(task: str, method: str, budget: int, seed: int, tasks_file: str | 
         if not dry_run:
             run(cmd_train, Path("logs") / f"train_{names.tag}.log")
         maybe(names.result_name, eval_command(names.merged_repo, task_cfg["data_repo"], out_dir / names.result_name,
-                                              names.tag, seed, defaults["eval"]["gpu_mem"]), f"eval_{names.tag}")
+                                              names.tag, seed, defaults["eval"]["gpu_mem"],
+                                              task_cfg.get("prompt_style", "chart")), f"eval_{names.tag}")
     else:
         plan["skipped"].append(names.result_name)
         logger.info("skip training + ID eval for %s: result already on the Hub", names.tag)
@@ -166,7 +170,8 @@ def run_point(task: str, method: str, budget: int, seed: int, tasks_file: str | 
         for ood_repo in task_cfg.get("ood_eval", []):
             name = names.ood_result_name(ood_repo)
             maybe(name, eval_command(names.merged_repo, ood_repo, out_dir / name, f"{names.tag}_on_{ood_repo.split('/')[-1]}",
-                                     seed, defaults["eval"]["gpu_mem"]), f"eval_{names.tag}_ood")
+                                     seed, defaults["eval"]["gpu_mem"], task_cfg.get("prompt_style", "chart")),
+                  f"eval_{names.tag}_ood")
     return plan
 
 

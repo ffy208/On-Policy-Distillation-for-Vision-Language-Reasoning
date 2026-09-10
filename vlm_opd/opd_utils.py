@@ -11,18 +11,19 @@ import torch
 import torch.nn.functional as F
 
 from .collate import prompt_text
+from .common import DEFAULT_PROMPT_STYLE
 
 KL_DIRECTIONS = ("reverse", "forward")
 
 
-def build_rollout_inputs(processor, rows: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
+def build_rollout_inputs(processor, rows: list[dict[str, Any]], style: str = DEFAULT_PROMPT_STYLE) -> dict[str, torch.Tensor]:
     """Left-padded prompt batch so every prompt ends at the same position and generation appends cleanly."""
     tok = processor.tokenizer
     old_side = tok.padding_side
     tok.padding_side = "left"
     try:
         enc = processor(
-            text=[prompt_text(processor, r["question"]) for r in rows],
+            text=[prompt_text(processor, r["question"], style=style) for r in rows],
             images=[r["image"] for r in rows],
             padding=True,
             return_tensors="pt",

@@ -62,9 +62,9 @@ Colab Pro units do not cover this. Options: Georgia Tech PACE (already used for 
 
 Code additions, in order:
 
-1. `prepare.py`: dataset adapters (`--source` already exists; add per-source field mapping and scorer choice, multiple-choice scoring for Geometry3K).
+1. `prepare.py`: dataset adapters. Done 2026-09-09: `SOURCES` registry with converters for ChartQA, Geometry3K (numeric answers with radicals and fractions evaluated by the shared scorer), CharXiv and ChartQAPro (numeric-answer chart questions as OOD test sets); `--prompt-style` threaded through every command from `configs/tasks.yaml`; `slurm/prepare_data.sbatch` builds a source in one job.
 2. `opd_trainer.py`: per-step KL share by token role using `analysis/token_classes.py` on the rollouts (cheap: tokens are already decoded for the accuracy signal). Log to `opd_log.jsonl`.
-3. `evaluate.py`: `--data-repo` for OOD sets; a script to build the OOD test sets with the same unified schema.
+3. `evaluate.py`: `--data-repo` for OOD sets; a script to build the OOD test sets with the same unified schema. Done (see item 1); `ood_eval` in `configs/tasks.yaml` lists CharXiv and ChartQAPro for the ChartQA task.
 4. `03_data_efficiency` generalized to a Slurm-friendly runner with a task argument; seeds as a loop.
 5. `opd_utils.per_token_kl`: optional per-token weights for method B.
 

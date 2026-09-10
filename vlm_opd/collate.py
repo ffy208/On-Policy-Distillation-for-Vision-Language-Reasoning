@@ -17,22 +17,23 @@ from typing import Any
 import torch
 from PIL import Image
 
-from .common import build_messages
+from .common import DEFAULT_PROMPT_STYLE, build_messages
 
 IGNORE_INDEX = -100
 END_OF_TURN = "<|im_end|>"
 
 
-def prompt_text(processor, question: str, answer: str | None = None) -> str:
+def prompt_text(processor, question: str, answer: str | None = None, style: str = DEFAULT_PROMPT_STYLE) -> str:
     """Chat-template text for the user turn plus the assistant header (generation prompt)."""
     return processor.apply_chat_template(
-        build_messages(question, answer), tokenize=False, add_generation_prompt=True
+        build_messages(question, answer, style), tokenize=False, add_generation_prompt=True
     )
 
 
-def encode_prompt(processor, image: Image.Image, question: str, answer: str | None = None) -> dict[str, torch.Tensor]:
+def encode_prompt(processor, image: Image.Image, question: str, answer: str | None = None,
+                  style: str = DEFAULT_PROMPT_STYLE) -> dict[str, torch.Tensor]:
     """Encode one prompt (single image) without padding. Returns 1-D `input_ids` plus vision tensors."""
-    enc = processor(text=[prompt_text(processor, question, answer)], images=[image], return_tensors="pt")
+    enc = processor(text=[prompt_text(processor, question, answer, style)], images=[image], return_tensors="pt")
     out: dict[str, torch.Tensor] = {
         "input_ids": enc["input_ids"][0],
         "pixel_values": enc["pixel_values"],
@@ -55,13 +56,15 @@ def encode_example(
     question: str,
     response: str,
     max_length: int | None = None,
+    style: str = DEFAULT_PROMPT_STYLE,
 ) -> dict[str, torch.Tensor]:
     """Build one unpadded SFT example with labels masked on the prompt.
 
     Args:
         max_length: If set, the response is truncated so the total length fits; the prompt is never cut.
+        style: Prompt wording (see `common.PROMPT_STYLES`).
     """
-    prompt = encode_prompt(processor, image, question)
+    prompt = encode_prompt(processor, image, question, style=style)
     prompt_ids = prompt["input_ids"]
     resp_ids = encode_response(processor, response)
     if max_length is not None:
@@ -114,15 +117,17 @@ def collate_examples(examples: list[dict[str, torch.Tensor]], pad_token_id: int)
 class SFTCollator:
     """Data collator for the HF Trainer: raw dataset rows -> padded supervised batch."""
 
-    def __init__(self, processor, max_length: int | None = 2048, response_key: str = "response"):
+    def __init__(self, processor, max_length: int | None = 2048, response_key: str = "response",
+                 prompt_style: str = DEFAULT_PROMPT_STYLE):
         self.processor = processor
         self.max_length = max_length
         self.response_key = response_key
+        self.prompt_style = prompt_style
         self.pad_token_id = processor.tokenizer.pad_token_id
 
     def __call__(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
         examples = [
-            encode_example(self.processor, r["image"], r["question"], r[self.response_key], self.max_length)
+            encode_example(self.processor, r["image"], r["question"], r[self.response_key], self.max_length, self.prompt_style)
             for r in rows
         ]
         batch = collate_examples(examples, self.pad_token_id)

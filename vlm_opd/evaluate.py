@@ -17,7 +17,9 @@ from pathlib import Path
 from typing import Any
 
 from .common import (
+    DEFAULT_PROMPT_STYLE,
     DEFAULT_SEED,
+    PROMPT_STYLES,
     build_messages,
     get_hf_token,
     image_pixel_bounds,
@@ -52,12 +54,12 @@ def build_vllm(
     )
 
 
-def build_inputs(processor, dataset) -> list[dict[str, Any]]:
+def build_inputs(processor, dataset, style: str = DEFAULT_PROMPT_STYLE) -> list[dict[str, Any]]:
     """Convert the dataset into vLLM multimodal inputs."""
     inputs: list[dict[str, Any]] = []
     for ex in dataset:
         prompt = processor.apply_chat_template(
-            build_messages(ex["question"]), tokenize=False, add_generation_prompt=True
+            build_messages(ex["question"], style=style), tokenize=False, add_generation_prompt=True
         )
         inputs.append({"prompt": prompt, "multi_modal_data": {"image": ex["image"]}})
     return inputs
@@ -96,6 +98,7 @@ def run_eval(
     seed: int = DEFAULT_SEED,
     tag: str | None = None,
     llm=None,
+    prompt_style: str = DEFAULT_PROMPT_STYLE,
 ) -> dict[str, Any]:
     """Full evaluation pipeline: build engine -> build inputs -> generate -> score -> write json.
 
@@ -119,7 +122,7 @@ def run_eval(
             model_id, max_model_len, gpu_memory_utilization, seed, enable_lora=lora_path is not None
         )
 
-    inputs = build_inputs(processor, dataset)
+    inputs = build_inputs(processor, dataset, prompt_style)
     t0 = time.time()
     texts = generate(llm, inputs, max_new_tokens, temperature, seed, lora_path)
     elapsed = time.time() - t0
@@ -141,6 +144,7 @@ def run_eval(
         "max_new_tokens": max_new_tokens,
         "temperature": temperature,
         "seed": seed,
+        "prompt_style": prompt_style,
         "elapsed_sec": round(elapsed, 1),
         "mean_output_chars": sum(len(t) for t in texts) / max(1, len(texts)),
         "records": scored["records"],
@@ -169,6 +173,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--limit", type=int, default=None, help="Evaluate only the first N rows (smoke test)")
     parser.add_argument("--tag", type=str, default=None)
+    parser.add_argument("--prompt-style", type=str, default=DEFAULT_PROMPT_STYLE, choices=PROMPT_STYLES)
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -177,7 +182,7 @@ def main() -> None:
         ds = ds.select(range(min(args.limit, len(ds))))
     run_eval(
         args.model, ds, args.out, args.lora_path, args.max_new_tokens, args.temperature,
-        args.max_model_len, args.gpu_mem, args.seed, args.tag,
+        args.max_model_len, args.gpu_mem, args.seed, args.tag, prompt_style=args.prompt_style,
     )
 
 

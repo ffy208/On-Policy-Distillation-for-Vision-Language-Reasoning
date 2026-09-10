@@ -20,7 +20,9 @@ from pathlib import Path
 from typing import Any
 
 from .common import (
+    DEFAULT_PROMPT_STYLE,
     DEFAULT_SEED,
+    PROMPT_STYLES,
     get_hf_token,
     image_pixel_bounds,
     load_hub_dataset,
@@ -65,6 +67,7 @@ def generate_dataset(
     seed: int = DEFAULT_SEED,
     max_model_len: int = 4096,
     gpu_memory_utilization: float = 0.9,
+    prompt_style: str = DEFAULT_PROMPT_STYLE,
 ):
     """Sample teacher solutions and return (filtered dataset, stats dict)."""
     from transformers import AutoProcessor
@@ -73,7 +76,7 @@ def generate_dataset(
     processor = AutoProcessor.from_pretrained(model_id, token=token, **image_pixel_bounds())
     llm = build_vllm(model_id, max_model_len, gpu_memory_utilization, seed)
 
-    inputs = build_inputs(processor, dataset)
+    inputs = build_inputs(processor, dataset, prompt_style)
     t0 = time.time()
     samples = sample_solutions(llm, inputs, num_samples, temperature, max_new_tokens, seed)
     elapsed = time.time() - t0
@@ -97,6 +100,7 @@ def generate_dataset(
         "temperature": temperature,
         "max_new_tokens": max_new_tokens,
         "seed": seed,
+        "prompt_style": prompt_style,
         "mean_response_chars": sum(lengths) / max(1, len(lengths)),
         "elapsed_sec": round(elapsed, 1),
     }
@@ -119,6 +123,7 @@ def main() -> None:
     parser.add_argument("--gpu-mem", type=float, default=0.9)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--limit", type=int, default=None, help="Only the first N questions (smoke test)")
+    parser.add_argument("--prompt-style", type=str, default=DEFAULT_PROMPT_STYLE, choices=PROMPT_STYLES)
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -127,7 +132,7 @@ def main() -> None:
         ds = ds.select(range(min(args.limit, len(ds))))
     kept, stats = generate_dataset(
         args.model, ds, args.num_samples, args.temperature, args.max_new_tokens, args.seed,
-        args.max_model_len, args.gpu_mem,
+        args.max_model_len, args.gpu_mem, prompt_style=args.prompt_style,
     )
     if args.stats:
         Path(args.stats).parent.mkdir(parents=True, exist_ok=True)

@@ -1,5 +1,6 @@
 """Unit tests for common.py: answer parsing, relaxed accuracy, prompt construction, image resizing."""
 
+import pytest
 from PIL import Image
 
 from vlm_opd.common import (
@@ -131,3 +132,26 @@ def test_image_pixel_bounds_matches_max_side():
     # A 768x768 image must fit within max_pixels, otherwise the processor would downscale it again
     assert 768 * 768 <= bounds["max_pixels"]
     assert bounds["min_pixels"] < bounds["max_pixels"]
+
+
+def test_prompt_styles():
+    from vlm_opd.common import PROMPT_STYLES, build_messages
+
+    assert set(PROMPT_STYLES) == {"chart", "geometry"}
+    chart = build_prompt_text("Q?", style="chart")
+    geo = build_prompt_text("Q?", style="geometry")
+    assert chart != geo and "chart" in chart and "figure" in geo
+    assert chart.endswith("Question: Q?") and geo.endswith("Question: Q?")
+    assert build_messages("Q?", style="geometry")[0]["content"][1]["text"] == geo
+    with pytest.raises(ValueError):
+        build_prompt_text("Q?", style="poetry")
+
+
+def test_parse_number_math_forms():
+    assert parse_number("2 \\sqrt { 221 }") == pytest.approx(2 * 221 ** 0.5)
+    assert parse_number("\\frac { 26 } { 3 }") == pytest.approx(26 / 3)
+    assert parse_number("12 \\pi") == pytest.approx(12 * 3.141592653589793)
+    assert parse_number("3√2") == pytest.approx(3 * 2 ** 0.5)
+    assert parse_number("2**10000000") is None and parse_number("9**9**9") is None and parse_number("2^3") is None
+    assert parse_number("__import__('os')") is None and parse_number("sqrt(-1)") is None and parse_number("1/0") is None
+    assert relaxed_accuracy("29.7", "2 \\sqrt { 221 }")

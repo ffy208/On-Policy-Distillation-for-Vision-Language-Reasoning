@@ -158,9 +158,9 @@ The test suite runs on CPU: answer parsing and scoring, deterministic sampling, 
 
 ```
 vlm_opd/
-  common.py         prompt template, Answer: parsing, relaxed accuracy, data loading (single implementation)
+  common.py         prompt styles (chart, geometry), Answer: parsing incl. sqrt/frac/pi expressions, relaxed accuracy, data loading
   hub_utils.py      checkpoint push to the HF Hub and resume after disconnect
-  prepare.py        ChartQA sampling, image resizing, push to a Hub dataset repo
+  prepare.py        source adapters (ChartQA, Geometry3K, CharXiv, ChartQAPro), seeded sampling, image resizing, Hub push
   evaluate.py       vLLM batch inference + scoring -> json
   generate_teacher.py sample teacher solutions with vLLM, keep the correct ones, push as SFT data
   collate.py        prompt encoding and supervised batches with prompt/image positions masked

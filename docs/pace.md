@@ -66,12 +66,27 @@ and the OPD minus SFT paired bootstrap computed over the seeds both methods shar
 
 ## Adding a task or an OOD test set
 
-1. Push the dataset in the unified schema with `python -m vlm_opd.prepare` (or a small adapter for
-   sources with different fields) to a private Hub dataset repo.
-2. For a training task, generate and push verified teacher solutions with
-   `python -m vlm_opd.generate_teacher` and add an entry to `configs/tasks.yaml`.
-3. For an OOD test set, list its repo under `ood_eval` of the tasks that should be scored on it;
-   every point then also produces `eval_<point>_on_<set>.json`.
+`vlm_opd/prepare.py` has one adapter per source (`SOURCES`): `chartqa`, `geometry3k` (train + test),
+`charxiv` and `chartqapro` (test only, chart questions with numeric answers, used as out-of-distribution
+evaluations for the ChartQA-trained models). Each adapter maps the raw fields onto `{id, image, question, answer}`
+and drops rows the relaxed-accuracy scorer cannot judge. One job builds a source end to end:
+
+```bash
+sbatch --export=ALL,SOURCE=geometry3k slurm/prepare_data.sbatch   # dataset + verified teacher solutions (SFT data)
+sbatch --export=ALL,SOURCE=charxiv    slurm/prepare_data.sbatch   # OOD test set
+sbatch --export=ALL,SOURCE=chartqapro slurm/prepare_data.sbatch
+```
+
+Geometry3K answers are expressions such as `2 \sqrt { 5 }` or `\frac { 26 } { 3 }`; the scorer evaluates them
+to a number (no exponents allowed, so the evaluator cannot be made to hang) and applies the same 5 percent
+tolerance. Its task entry in `configs/tasks.yaml` sets `prompt_style: geometry`, which every command
+(SFT, OPD, evaluation, teacher generation) receives as `--prompt-style`; the two wordings differ only in
+the task description, the `Answer:` format instruction is shared.
+
+For a new source: add a converter and a `SOURCES` entry in `prepare.py`, a task entry (or an `ood_eval`
+list item) in `configs/tasks.yaml`, and, for a training task, generate the SFT data with
+`python -m vlm_opd.generate_teacher --prompt-style <style>`. Every point then also produces
+`eval_<point>_on_<set>.json` for each OOD set of its task.
 
 ## Job sizing
 

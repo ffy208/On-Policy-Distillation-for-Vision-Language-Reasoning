@@ -37,24 +37,37 @@ MAX_IMAGE_TOKENS: int = 600
 # Fixed prefix for the final answer; every prompt and parser depends on it
 ANSWER_PREFIX: str = "Answer:"
 
-# Unified prompt template: reason first, then give the answer on the last line as `Answer: xxx`
-PROMPT_TEMPLATE: str = (
-    "Look at the chart and answer the question below.\n"
-    "Reason step by step: first read the relevant values from the chart, "
-    "then do any calculation needed. "
+# Unified prompt templates: reason first, then give the answer on the last line as `Answer: xxx`.
+# One wording per task family; every stage of a task uses the same style (see configs/tasks.yaml).
+_TAIL = (
     "Keep the reasoning concise.\n"
     "On the last line, write the final answer in exactly this format:\n"
     f"{ANSWER_PREFIX} <your answer>\n\n"
     "Question: {question}"
 )
+PROMPT_TEMPLATES: dict[str, str] = {
+    "chart": (
+        "Look at the chart and answer the question below.\n"
+        "Reason step by step: first read the relevant values from the chart, then do any calculation needed. " + _TAIL
+    ),
+    "geometry": (
+        "Look at the geometry figure and solve the problem below.\n"
+        "Reason step by step: first state the given measures and relations you can read from the figure, "
+        "then apply the relevant theorems and compute. Give the final answer as a number "
+        "(decimals are fine; simplify radicals or fractions to a decimal if needed). " + _TAIL
+    ),
+}
+PROMPT_STYLES = tuple(PROMPT_TEMPLATES)
+DEFAULT_PROMPT_STYLE = "chart"
+PROMPT_TEMPLATE: str = PROMPT_TEMPLATES[DEFAULT_PROMPT_STYLE]  # kept for backwards compatibility
 
-# Privileged-information template seen by the teacher side in self-distillation (Stage 5)
-PRIVILEGED_PROMPT_TEMPLATE: str = (
-    PROMPT_TEMPLATE
-    + "\n\nThe correct final answer is known to be: {answer}. "
+# Privileged-information suffix seen by the teacher side in self-distillation (Stage 5)
+_PRIVILEGED_SUFFIX = (
+    "\n\nThe correct final answer is known to be: {answer}. "
     "Write out the reasoning that leads to it, and finish with the same "
     f"`{ANSWER_PREFIX} <your answer>` line."
 )
+PRIVILEGED_PROMPT_TEMPLATE: str = PROMPT_TEMPLATE + _PRIVILEGED_SUFFIX
 
 
 # ---------------------------------------------------------------------------
@@ -62,22 +75,26 @@ PRIVILEGED_PROMPT_TEMPLATE: str = (
 # ---------------------------------------------------------------------------
 
 
-def build_prompt_text(question: str, answer: str | None = None) -> str:
+def build_prompt_text(question: str, answer: str | None = None, style: str = DEFAULT_PROMPT_STYLE) -> str:
     """Build the text part of the prompt.
 
     Args:
         question: The question text.
-        answer: If given, use the privileged template (teacher side of self-distillation).
+        answer: If given, append the privileged-information suffix (teacher side of self-distillation).
+        style: Prompt wording, one of `PROMPT_STYLES`.
 
     Returns:
         The filled prompt text (without the image placeholder).
     """
+    if style not in PROMPT_TEMPLATES:
+        raise ValueError(f"unknown prompt style {style!r}; expected one of {PROMPT_STYLES}")
+    template = PROMPT_TEMPLATES[style]
     if answer is None:
-        return PROMPT_TEMPLATE.format(question=question.strip())
-    return PRIVILEGED_PROMPT_TEMPLATE.format(question=question.strip(), answer=answer.strip())
+        return template.format(question=question.strip())
+    return (template + _PRIVILEGED_SUFFIX).format(question=question.strip(), answer=answer.strip())
 
 
-def build_messages(question: str, answer: str | None = None) -> list[dict[str, Any]]:
+def build_messages(question: str, answer: str | None = None, style: str = DEFAULT_PROMPT_STYLE) -> list[dict[str, Any]]:
     """Build the messages structure expected by the Qwen3-VL chat template (one image + text).
 
     The image itself is not placed in the messages; it is passed separately to the
@@ -95,7 +112,7 @@ def build_messages(question: str, answer: str | None = None) -> list[dict[str, A
             "role": "user",
             "content": [
                 {"type": "image"},
-                {"type": "text", "text": build_prompt_text(question, answer)},
+                {"type": "text", "text": build_prompt_text(question, answer, style)},
             ],
         }
     ]
@@ -168,8 +185,45 @@ def normalize_text(text: str) -> str:
     return text.rstrip(".").strip()
 
 
+_MATH_ALLOWED = re.compile(r"^[\d\s+\-*/().]*$")
+
+
+def _eval_math_expr(text: str) -> float | None:
+    """Evaluate a small closed-form expression (sqrt, pi, fractions, radicals) to a float, or None.
+
+    Accepts plain arithmetic plus LaTeX-style `\\sqrt{x}`, `\\frac{a}{b}`, `\\pi`, unicode `√` / `π`, and
+    implicit multiplication such as `2 \\sqrt{5}` or `12\\pi`, which is how Geometry3K writes answers.
+    Only digits, operators, parentheses, and the sqrt/pi tokens are allowed, so no code is ever executed.
+    """
+    import math
+
+    s = text.strip().lower().replace("$", "").replace(",", "")
+    s = re.sub(r"\\left|\\right|\\cdot|\\times|\\,|\\!", " ", s)
+    s = re.sub(r"\\frac\s*{([^{}]*)}\s*{([^{}]*)}", r"((\1)/(\2))", s)
+    s = re.sub(r"\\sqrt\s*{([^{}]*)}", r"sqrt(\1)", s)
+    s = re.sub(r"\\sqrt\s*(\d+(?:\.\d+)?)", r"sqrt(\1)", s)
+    s = re.sub(r"√\s*\(?([\d.]+)\)?", r"sqrt(\1)", s)
+    s = re.sub(r"\\pi|π|\bpi\b", "pi", s)
+    s = s.replace("{", "(").replace("}", ")")
+    # implicit multiplication: number followed by sqrt/pi/parenthesis, or a closing parenthesis followed by a term
+    s = re.sub(r"(\d|\))\s*(?=(sqrt|pi|\())", r"\1*", s)
+    s = re.sub(r"(pi|\))\s*(?=\d)", r"\1*", s)
+    s = s.replace(" ", "")
+    if not s or len(s) > 80 or "^" in s or "**" in s or not _MATH_ALLOWED.match(re.sub(r"sqrt|pi", "", s)):
+        return None  # exponents are rejected outright: they are never needed and can blow up evaluation
+    if not re.search(r"\d", s):
+        return None
+    try:
+        value = eval(s, {"__builtins__": {}}, {"sqrt": math.sqrt, "pi": math.pi})
+        value = float(value)
+    except Exception:  # noqa: BLE001 - malformed, non-numeric, or overflowing expressions are simply "not a number"
+        return None
+    return value if math.isfinite(value) else None
+
+
 def parse_number(text: str) -> float | None:
-    """Best-effort numeric parsing supporting `1,234`, `45%`, `$12.5`, `12.5 million`, etc.
+    """Best-effort numeric parsing supporting `1,234`, `45%`, `$12.5`, `12.5 million`, and closed-form
+    math such as `2 \\sqrt{5}`, `\\frac{26}{3}`, `12\\pi`, `3√2`.
 
     Returns None when the string is not numeric.
     """
@@ -182,7 +236,7 @@ def parse_number(text: str) -> float | None:
             return float(s)
         except ValueError:
             return None
-    return None
+    return _eval_math_expr(s)
 
 
 def relaxed_accuracy(pred: str | None, gold: str, tolerance: float = 0.05) -> bool:

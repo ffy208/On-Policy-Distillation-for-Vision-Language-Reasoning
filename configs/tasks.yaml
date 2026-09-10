@@ -17,5 +17,18 @@ tasks:
     # Results produced by the Colab notebooks (seed 42) used names without task or seed suffixes.
     legacy_seed: 42
     legacy_prefix: human
-    # Extra test sets (same schema) every trained model is also scored on; fill in once prepared.
+    prompt_style: chart
+    # Extra test sets (same schema) every trained model is also scored on. Build them with
+    #   python -m vlm_opd.prepare --source charxiv    --n-test 500 --repo-id ffyang/vlm_opd_ood_charxiv
+    #   python -m vlm_opd.prepare --source chartqapro --n-test 500 --repo-id ffyang/vlm_opd_ood_chartqapro
+    ood_eval: [ffyang/vlm_opd_ood_charxiv, ffyang/vlm_opd_ood_chartqapro]
+
+  geometry3k:
+    # Second task (geometry problems with numeric answers; answers such as `2 \sqrt { 5 }` are evaluated by
+    # the math-aware parser in common.py). Build with:
+    #   python -m vlm_opd.prepare --source geometry3k --n-train 2101 --n-test 500 --repo-id ffyang/vlm_opd_geometry3k
+    #   python -m vlm_opd.generate_teacher --prompt-style geometry --data-repo ffyang/vlm_opd_geometry3k --out-repo ffyang/vlm_opd_sft_geometry3k
+    data_repo: ffyang/vlm_opd_geometry3k
+    sft_data_repo: ffyang/vlm_opd_sft_geometry3k
+    prompt_style: geometry
     ood_eval: []

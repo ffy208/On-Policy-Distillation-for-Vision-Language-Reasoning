@@ -31,7 +31,9 @@ import torch
 
 from .collate import END_OF_TURN
 from .common import (
+    DEFAULT_PROMPT_STYLE,
     DEFAULT_SEED,
+    PROMPT_STYLES,
     STUDENT_MODEL,
     TEACHER_MODEL,
     get_hf_token,
@@ -78,6 +80,7 @@ class OPDConfig:
     seed: int = DEFAULT_SEED
     limit: int | None = None
     resume: bool = True
+    prompt_style: str = DEFAULT_PROMPT_STYLE
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +148,7 @@ def opd_step(student, teacher, processor, rows: list[dict[str, Any]], cfg: OPDCo
     tok = processor.tokenizer
     pad_id, eos_id = tok.pad_token_id, tok.convert_tokens_to_ids(END_OF_TURN)
 
-    inputs = {k: v.to(device) for k, v in build_rollout_inputs(processor, rows).items()}
+    inputs = {k: v.to(device) for k, v in build_rollout_inputs(processor, rows, cfg.prompt_style).items()}
     inputs["pixel_values"] = inputs["pixel_values"].to(dtype)
     batch_size, prompt_len = inputs["input_ids"].shape
 
@@ -363,6 +366,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--limit", type=int, default=None, help="Use only the first N training questions (smoke)")
     parser.add_argument("--no-resume", action="store_true")
+    parser.add_argument("--prompt-style", type=str, default=DEFAULT_PROMPT_STYLE, choices=PROMPT_STYLES)
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -372,7 +376,7 @@ def main() -> None:
         micro_batch=args.micro_batch, max_new_tokens=args.max_new_tokens, temperature=args.temperature,
         top_p=args.top_p, kl_direction=args.kl_direction, learning_rate=args.lr, total_steps=args.total_steps,
         warmup_steps=args.warmup_steps, grad_clip=args.grad_clip, lora_r=args.lora_r, ckpt_every=args.ckpt_every,
-        seed=args.seed, limit=args.limit, resume=not args.no_resume,
+        seed=args.seed, limit=args.limit, resume=not args.no_resume, prompt_style=args.prompt_style,
     )
     train(cfg)
 

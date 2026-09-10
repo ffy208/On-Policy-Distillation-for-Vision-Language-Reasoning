@@ -52,7 +52,11 @@ def test_commands_carry_the_config():
 
 
 def test_dry_run_builds_train_then_eval(tmp_path):
-    plan = run_point("chartqa_human", "opd", 100, 7, dry_run=True, opd_steps=5)
+    plan = run_point("chartqa_human", "opd", 100, 7, dry_run=True, opd_steps=5, skip_ood=True)
     modules = [c[2] for c in plan["commands"]]
     assert modules == ["vlm_opd.opd_trainer", "vlm_opd.evaluate"]
+    assert plan["commands"][0][plan["commands"][0].index("--prompt-style") + 1] == "chart"
+    with_ood = run_point("chartqa_human", "opd", 100, 7, dry_run=True, opd_steps=5)
+    n_ood = len(load_tasks(TASKS_FILE)["tasks"]["chartqa_human"]["ood_eval"])
+    assert [c[2] for c in with_ood["commands"]] == ["vlm_opd.opd_trainer"] + ["vlm_opd.evaluate"] * (1 + n_ood)
     assert "5" == plan["commands"][0][plan["commands"][0].index("--total-steps") + 1]
