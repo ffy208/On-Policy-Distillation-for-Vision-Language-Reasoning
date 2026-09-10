@@ -17,7 +17,9 @@ echo 'hf_...' > ~/.hf_token && chmod 600 ~/.hf_token
 The scripts load `python/3.12.5` and `cuda/12.6.1` and do not set a partition: Slurm uses the account's
 default (`coc-gpu` here; the `ice-gpu` H100/H200 nodes are not open to this account and jobs sent there sit
 in `ReqNodeNotAvail`). `coc-gpu` offers 8 A100 and 32 L40S (48 GB). The default GRES is `gpu:l40s:1` (the larger pool);
-override with `--gres=gpu:a100:1` on the sbatch line or `GPU=a100 slurm/sweep.sh ...`. GRES type names are
+override with `--gres=gpu:a100:1` on the sbatch line or `GPU=a100 slurm/sweep.sh ...`. The `ice-bw-gpu`
+RTX PRO 6000 Blackwell nodes (97 GB per card) are also open to the account and are reached with
+`--gres=gpu:rtx_pro_6000_blackwell:1`; they fit a 32B teacher on one card. GRES type names are
 lowercase and memory is requested per GPU (`--mem-per-gpu`), as PACE expects. Always `sbatch` from the repository root: the job uses `SLURM_SUBMIT_DIR` to find the code.
 Set `SCRATCH` and `HF_HOME` in `~/.bashrc` so models download to scratch, not to the home quota:
 
@@ -27,6 +29,10 @@ export HF_HOME=$SCRATCH/hf_cache
 ```
 
 ## Smoke test (about 15 minutes on one A100)
+
+Measured 2026-09-09 on one L40S: 9 min 40 s wall time end to end (environment, 5 OPD steps on 100 questions,
+merge, vLLM evaluation of 500 questions in 20 s); accuracy 0.754 after 5 steps versus 0.668 zero-shot.
+Resubmitting the same point afterwards exits in 7 s because the result is already on the Hub.
 
 ```bash
 sbatch slurm/smoke.sbatch          # 5 OPD steps on 100 questions, seed 99, 45-minute walltime

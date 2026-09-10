@@ -31,7 +31,7 @@ module load cuda/12.6.1 2>/dev/null || module load cuda 2>/dev/null || true
 # shellcheck disable=SC1091
 source "$ENV_DIR/bin/activate"
 cd "$REPO_DIR"
-git pull -q || true
+git pull --ff-only -q || echo "WARNING: git pull skipped (local branch diverged from origin); running the checked-out code"
 mkdir -p outputs
 
 case "$SOURCE" in
