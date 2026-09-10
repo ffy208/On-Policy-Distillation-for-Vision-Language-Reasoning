@@ -14,6 +14,8 @@
 #SBATCH --gres=gpu:l40s:1
 #SBATCH -t 01:30:00
 #SBATCH -o logs/%x-%j.out
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=frank.yang@gatech.edu
 set -euo pipefail
 
 : "${SOURCE:?set SOURCE to geometry3k, charxiv or chartqapro}"

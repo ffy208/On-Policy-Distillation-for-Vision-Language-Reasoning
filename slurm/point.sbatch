@@ -12,6 +12,8 @@
 #SBATCH --gres=gpu:l40s:1
 #SBATCH -t 02:30:00              # OPD points take ~90 min; keep walltime short so the job backfills
 #SBATCH -o logs/%x-%j.out
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=frank.yang@gatech.edu
 set -euo pipefail
 
 : "${TASK:?set TASK}"; : "${METHOD:?set METHOD}"; : "${BUDGET:?set BUDGET}"; : "${SEED:=42}"

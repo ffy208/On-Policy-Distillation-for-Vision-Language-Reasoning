@@ -10,6 +10,8 @@
 #SBATCH --mem-per-gpu=32G
 #SBATCH -t 00:45:00
 #SBATCH -o logs/%x-%j.out
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=frank.yang@gatech.edu
 export TASK="${TASK:-chartqa_human}" METHOD="${METHOD:-opd}" BUDGET="${BUDGET:-100}" SEED="${SEED:-99}"
 export EXTRA_ARGS="${EXTRA_ARGS:---opd-steps 5 --sft-steps 5 --skip-ood}"
 exec bash "${SLURM_SUBMIT_DIR:-$PWD}/slurm/point.sbatch"
