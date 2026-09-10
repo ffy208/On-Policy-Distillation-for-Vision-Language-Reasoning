@@ -94,7 +94,9 @@ If a merged model is missing locally when an evaluation is still needed, the run
 OPD resumes from its final checkpoint and only merges, SFT retrains (12 minutes). `python scripts/hub_storage.py`
 reports storage per repo; `--prune-ckpts`, `--squash`, and `--delete-matching smoke` reclaim space (dry run without
 `--yes`). The quota counts every LFS file in a repo's git history, so deleting files or folders frees nothing
-until the history is squashed; the runner squashes a checkpoint repo after each prune.
+until the history is squashed; the runner squashes a checkpoint repo after each prune. Released storage shows
+up on the billing page with a delay: after deleting and squashing, the page read 47.6 GB while the files in the
+remaining repos summed to 9.9 GB (2026-09-10), a constant 38 GB gap that only the Hub can clear.
 
 ## Adding a task or an OOD test set
 
