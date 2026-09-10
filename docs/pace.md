@@ -70,6 +70,14 @@ This writes `outputs/data_efficiency_chartqa_human.{json,md,png}` with per-seed 
 across-seed mean and standard deviation, a bootstrap interval pooled over questions of all seeds,
 and the OPD minus SFT paired bootstrap computed over the seeds both methods share.
 
+## Bad GPUs
+
+One L40S on `atl1-1-03-004-27-0` raised `cudaErrorECCUncorrectable` at device setup and killed four jobs
+across two submissions (2026-09-10). Every job script now touches the GPU first; if that fails, the job adds
+its node to its own `ExcNodeList`, requeues itself (`--requeue`), and exits 0, so the point simply starts
+again elsewhere (OPD resumes from its Hub checkpoint). To exclude a node by hand for a whole sweep:
+`export SBATCH_EXCLUDE=<node>` before `slurm/sweep.sh`. Report the node to pace-support@oit.gatech.edu.
+
 ## What goes to the Hub
 
 A free Hub account has 100 GB of private storage, and the notebook-era policy (push every merged model, keep

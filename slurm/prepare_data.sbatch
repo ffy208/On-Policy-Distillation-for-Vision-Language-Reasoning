@@ -32,7 +32,20 @@ module load cuda/12.6.1 2>/dev/null || module load cuda 2>/dev/null || true
 source "$ENV_DIR/bin/activate"
 cd "$REPO_DIR"
 git pull --ff-only -q || echo "WARNING: git pull skipped (local branch diverged from origin); running the checked-out code"
-mkdir -p outputs
+mkdir -p outputs logs
+# GPU health check: some cards raise uncorrectable ECC errors at first touch. If so, exclude this node
+# for this job and go back into the queue instead of failing (the point resumes from its Hub checkpoint).
+if ! python -c "import torch; torch.zeros(1).cuda(); torch.cuda.synchronize()" 2>logs/gpu_check-$SLURM_JOB_ID.err; then
+  echo "GPU check failed on $SLURMD_NODENAME; excluding it and requeueing" >&2
+  cat logs/gpu_check-$SLURM_JOB_ID.err >&2
+  PREV="$(scontrol show job "$SLURM_JOB_ID" | sed -n 's/.*ExcNodeList=\([^ ]*\).*/\1/p')"
+  EXC="$SLURMD_NODENAME"; [ -n "$PREV" ] && [ "$PREV" != "(null)" ] && EXC="$PREV,$SLURMD_NODENAME"
+  scontrol update JobId="$SLURM_JOB_ID" ExcNodeList="$EXC" || true
+  scontrol requeue "$SLURM_JOB_ID" || true
+  sleep 5; scontrol update JobId="$SLURM_JOB_ID" ExcNodeList="$EXC" || true   # retry once the job is pending
+  exit 0
+fi
+rm -f logs/gpu_check-$SLURM_JOB_ID.err
 
 case "$SOURCE" in
   geometry3k)
