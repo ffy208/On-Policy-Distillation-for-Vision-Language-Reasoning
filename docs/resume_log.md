@@ -45,6 +45,12 @@ Qwen3-VL-8B-Instruct. Task: ChartQA, human-written questions, 3000 train / 500 t
 - Accomplished a before/after comparison that shows what OPD changes, as measured by the OPD-300 student's mean per-token KL falling from 0.489 to 0.235 (11956 tokens), answer-line feedback collapsing from 19.5% to 2.2% of KL mass (2.67x to 0.38x), and the residual feedback shifting toward chart values (0.39x to 0.73x), by re-running the same analysis on the trained student with identical questions and colour scale.
 - Method observation recorded: numbers are tokenized into single digits and the teacher-student disagreement on a number sits almost entirely on its first digit (visible in the heatmaps), so per-token averaging dilutes number-level feedback; a digit-position breakdown is reported alongside the class table. Caveat: token roles are heuristic; the `text` class mixes structural and reasoning tokens.
 
+### Cluster port (2026-09-09, PACE ICE)
+
+- Accomplished a notebook-free port of the whole study to a Slurm cluster, as measured by one Slurm job running environment setup, 5 OPD steps on 100 questions, LoRA merge, Hub push, and a 500-question vLLM evaluation end to end in 9 min 40 s on a single L40S (accuracy 0.754 after 5 steps versus 0.668 zero-shot), by turning each stage into a `python -m vlm_opd.*` command driven by a task registry (`configs/tasks.yaml`) and an idempotent experiment runner that names every artifact by (task, method, budget, seed).
+- Accomplished restart safety at the job level, as measured by a resubmitted job for a finished point exiting in 7 s after checking the Hub results repo instead of retraining, by checking result presence on the Hub before every training or evaluation command.
+- Accomplished a second task and two out-of-distribution test sets without touching the training code, as measured by 63 passing tests covering four dataset converters (ChartQA, Geometry3K, CharXiv, ChartQAPro), two prompt styles, and a math-aware scorer that evaluates radical, fraction, and pi expressions with the same 5 percent tolerance, by adding a per-source converter registry to the data preparation module and threading a prompt style through every command from the task registry.
+
 ## Metrics to capture in later stages
 
 Fill each of these with the exact number and the json file it comes from.
