@@ -51,6 +51,13 @@ Qwen3-VL-8B-Instruct. Task: ChartQA, human-written questions, 3000 train / 500 t
 - Accomplished restart safety at the job level, as measured by a resubmitted job for a finished point exiting in 7 s after checking the Hub results repo instead of retraining, by checking result presence on the Hub before every training or evaluation command.
 - Accomplished a second task and two out-of-distribution test sets without touching the training code, as measured by 63 passing tests covering four dataset converters (ChartQA, Geometry3K, CharXiv, ChartQAPro), two prompt styles, and a math-aware scorer that evaluates radical, fraction, and pi expressions with the same 5 percent tolerance, by adding a per-source converter registry to the data preparation module and threading a prompt style through every command from the task registry.
 
+### Multi-seed replication on PACE (2026-09-10)
+
+- Accomplished a seed-robust version of the low-data result, as measured by three seeds at 100 and 300 training questions (18 new training runs on L40S GPUs) giving OPD 0.810 (sd 0.010) versus SFT 0.793 (sd 0.022) at 100 questions and OPD 0.827 (sd 0.008) versus SFT 0.799 (sd 0.015) at 300, with paired bootstrap deltas of +2.5 [+0.7, +4.2] and +2.9 [+1.3, +4.6] points over the shared seeds, by running the sweep through the idempotent experiment runner and aggregating with `python -m vlm_opd.analysis.data_efficiency` (intervals pooled over questions across seeds, deltas paired by seed and question).
+- Recorded the correction honestly: the original single-seed +5.8 at 300 questions was the most favourable of four SFT seeds (0.778 against 0.800 to 0.814 for the others); the multi-seed estimate is about half that but still excludes zero, and OPD's across-seed spread is half of SFT's. OPD on 100 questions (0.810) matches SFT on 900 (0.808), so the roughly 10x data-efficiency statement now rests on two budgets and three seeds.
+- Accomplished a storage policy fix after a silent failure mode, as measured by 14 parallel jobs all dying at their first Hub push once private storage reached 99.5 GB of the 100 GB free quota (HTTP 400), then completing after the change, by keeping 4.3 GB merged models on the cluster disk, pushing only 0.3 GB LoRA adapters, pruning checkpoint repos to their latest step, and adding a storage report/reclaim script (99.5 GB to 59.7 GB).
+- Diagnosed one unrelated hardware failure: two jobs on the same node failed at device setup with `cudaErrorECCUncorrectable`; excluded the node via `SBATCH_EXCLUDE` and reported it.
+
 ## Metrics to capture in later stages
 
 Fill each of these with the exact number and the json file it comes from.
@@ -85,11 +92,11 @@ Header line:
 Research-facing bullets:
 
 - Built an on-policy distillation pipeline for a vision-language model (Qwen3-VL 2B student, 8B teacher) on ChartQA, training a LoRA student on full-vocabulary per-token KL to the teacher over the student's own sampled rollouts, with Hub-checkpointed, disconnect-safe training on a single 40 GB A100.
-- Raised student accuracy from 0.668 to 0.836 on 500 held-out human-written questions using only 300 training questions, matching supervised distillation trained on 3,000 (0.834) and beating it by 5.8 points at equal data (paired bootstrap 95% CI +2.8 to +8.8).
+- Raised student accuracy from 0.668 to 0.827 (3 seeds) on 500 held-out human-written questions using only 300 training questions, matching supervised distillation trained on 3,000 (0.834) and beating it by 2.9 points at equal data (paired bootstrap 95% CI +1.3 to +4.6, three seeds); OPD on 100 questions matches SFT on 900.
 - Showed with a token-level analysis of 21K generated tokens that the teacher's feedback concentrates on the final-answer line (2.7x its token share) rather than chart-reading digits (0.4x), and that OPD closes that gap (0.4x) while halving mean per-token KL, independently corroborating the motivation of 2026 visual re-weighting methods.
 
 Engineering-facing alternative for the third bullet:
 
 - Cut evaluation to 12 s per 500 questions with vLLM (versus a planned 5 min), profiled rollout as 90% of OPD step time and doubled throughput at constant 27 GB by scaling the rollout batch, and shipped 1.5K lines of tested Python (53 CPU tests, CI) with restart-safe Colab notebooks.
 
-Guidance: describe it as independent research and a replication plus one measurement, never as a paper; be ready to explain every number (0.668 zero-shot, 0.834 full-data SFT, 0.836 OPD-300, 0.844 teacher, +5.8 paired delta) and to state the single-seed limitation unprompted; if space is tight keep the second bullet.
+Guidance: describe it as independent research and a replication plus one measurement, never as a paper; be ready to explain every number (0.668 zero-shot, 0.834 full-data SFT, 0.827 OPD-300 over 3 seeds, 0.844 teacher, +2.9 paired delta over seeds, and that the first single-seed run showed +5.8) and to say unprompted that 900 and 3000 are still single-seed; if space is tight keep the second bullet.

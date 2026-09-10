@@ -86,3 +86,12 @@ def test_collect_seeded_pools_and_pairs_by_seed(tmp_path):
     assert table["points"][1]["opd"] is None and "opd_minus_sft" not in table["points"][1]
     md = markdown_table_seeded(table)
     assert "n=3" in md and "over 3 seed(s)" in md and "pending" in md
+
+
+def test_find_runs_ignores_smoke_seed(tmp_path):
+    from vlm_opd.analysis.data_efficiency import find_runs
+
+    for name in ["eval_opd_chartqa_human_q100_s1.json", "eval_opd_chartqa_human_q100_s99.json"]:
+        (tmp_path / name).write_text("{}")
+    assert sorted(find_runs(tmp_path, "chartqa_human")[("opd", 100)]) == [1]
+    assert sorted(find_runs(tmp_path, "chartqa_human", exclude_seeds=())[("opd", 100)]) == [1, 99]

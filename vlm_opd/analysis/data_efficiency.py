@@ -131,13 +131,18 @@ _SEEDED = re.compile(r"^eval_(?P<method>sft|opd)_(?P<task>.+)_q(?P<budget>\d+)_s
 _LEGACY = re.compile(r"^eval_(?P<method>sft|opd)_q(?P<budget>\d+)\.json$")
 
 
-def find_runs(out_dir: str | Path, task: str, legacy_seed: int = 42) -> dict[tuple[str, int], dict[int, Path]]:
+SMOKE_SEEDS = (99,)  # slurm/smoke.sbatch trains 5 steps under seed 99; never a real point
+
+
+def find_runs(out_dir: str | Path, task: str, legacy_seed: int = 42,
+              exclude_seeds: tuple[int, ...] = SMOKE_SEEDS) -> dict[tuple[str, int], dict[int, Path]]:
     """Map (method, budget) -> {seed: result file} for one task, including the notebook-era seed-42 files."""
     runs: dict[tuple[str, int], dict[int, Path]] = {}
     for p in Path(out_dir).glob("eval_*.json"):
         m = _SEEDED.match(p.name)
         if m and m["task"] == task:
-            runs.setdefault((m["method"], int(m["budget"])), {})[int(m["seed"])] = p
+            if int(m["seed"]) not in exclude_seeds:
+                runs.setdefault((m["method"], int(m["budget"])), {})[int(m["seed"])] = p
             continue
         m = _LEGACY.match(p.name)
         if m and task == "chartqa_human":
@@ -174,9 +179,10 @@ def _paired_over_seeds(a: dict[int, Path], b: dict[int, Path], n_boot: int) -> d
 
 
 def collect_seeded(out_dir: str | Path, task: str, budgets: list[int], baseline_json: str | Path | None = None,
-                   teacher_json: str | Path | None = None, n_boot: int = 10000) -> dict[str, Any]:
+                   teacher_json: str | Path | None = None, n_boot: int = 10000,
+                   exclude_seeds: tuple[int, ...] = SMOKE_SEEDS) -> dict[str, Any]:
     """Same shape as `collect` (so `markdown_table`, `plot`, `crossover` work) but aggregated over every seed found."""
-    runs = find_runs(out_dir, task)
+    runs = find_runs(out_dir, task, exclude_seeds=exclude_seeds)
     points: list[dict[str, Any]] = []
     for budget in budgets:
         row: dict[str, Any] = {"budget": budget}
@@ -225,8 +231,11 @@ def main() -> None:
     parser.add_argument("--baseline", default="outputs/eval_student_zeroshot.json")
     parser.add_argument("--teacher", default="outputs/eval_teacher_zeroshot.json")
     parser.add_argument("--n-boot", type=int, default=10000)
+    parser.add_argument("--exclude-seeds", type=int, nargs="*", default=list(SMOKE_SEEDS),
+                        help="Seeds to ignore (default: the smoke-test seed 99)")
     args = parser.parse_args()
-    table = collect_seeded(args.out_dir, args.task, args.budgets, args.baseline, args.teacher, args.n_boot)
+    table = collect_seeded(args.out_dir, args.task, args.budgets, args.baseline, args.teacher, args.n_boot,
+                           exclude_seeds=tuple(args.exclude_seeds))
     out = Path(args.out_dir)
     (out / f"data_efficiency_{args.task}.json").write_text(json.dumps(table, indent=2))
     md = markdown_table_seeded(table)

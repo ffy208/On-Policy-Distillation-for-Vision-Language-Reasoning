@@ -87,7 +87,7 @@ Timeline at roughly 10 hours per week:
 
 - *The crossover does not replicate on another task.* Then the paper becomes "when it does and does not", still publishable if the OOD and dynamics claims hold; check after the second task's 300-question point (week 3).
 - *OOD shows no OPD advantage.* Then the DAgger argument does not translate at this scale; report it. Decide after ChartQA-trained models are scored on the first OOD set (week 3).
-- *Seed variance swallows the 300-question gap.* Then the headline weakens to the crossover statement; check after the first 3 seeds (week 3).
+- *Seed variance swallows the 300-question gap.* Checked 2026-09-10 on PACE: it does not. Over three seeds the paired delta is +2.5 [+0.7, +4.2] at 100 questions and +2.9 [+1.3, +4.6] at 300 (the single-seed +5.8 was the most favourable SFT seed). OPD's across-seed spread (sd 0.008 to 0.010) is half of SFT's (0.015 to 0.022), which is itself a reportable property of on-policy training.
 - *A mentor.* An independent study or a faculty co-author at Georgia Tech raises the credibility of the venue submission and unlocks compute. Approach someone in the second week with the current project page as the pitch.
 
 ## 6. What to do first
