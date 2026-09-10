@@ -128,6 +128,10 @@ def prune_remote(repo_id: str, keep: int = 1, token: str | None = None) -> list[
         old = remote_steps_to_prune(api.list_repo_files(repo_id), keep)
         for d in old:
             api.delete_folder(path_in_repo=d, repo_id=repo_id, commit_message=f"prune {d}")
+        if old:
+            # The private-storage quota counts every LFS file in the git history, so deleting alone frees
+            # nothing; squashing the history to one commit drops the unreferenced files.
+            api.super_squash_history(repo_id)
     except Exception as e:  # noqa: BLE001 - pruning is housekeeping; never fail training over it
         logger.warning("Could not prune old checkpoints in %s: %s", repo_id, e)
         return []

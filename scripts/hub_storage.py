@@ -3,7 +3,8 @@
 A free Hub account has 100 GB of private storage. Merged models cost ~4.3 GB each and every OPD
 checkpoint step ~0.8 GB, so the notebook-era policy of pushing everything fills the quota after about
 twenty points (every push then fails with HTTP 400). This script shows where the space goes and can
-prune checkpoint repos to their latest step and delete repos that match a pattern.
+prune checkpoint repos to their latest step, squash histories (the quota counts every LFS file ever
+committed, so deletions free nothing until the history is squashed), and delete repos matching a pattern.
 
     python scripts/hub_storage.py                       # report
     python scripts/hub_storage.py --prune-ckpts         # dry run: which step folders would be deleted
@@ -41,6 +42,8 @@ def main() -> None:
     parser.add_argument("--user", default="ffyang")
     parser.add_argument("--prune-ckpts", action="store_true", help="Keep only the latest step in every *_ckpt repo")
     parser.add_argument("--delete-matching", default=None, help="Delete repos whose name contains this substring")
+    parser.add_argument("--squash", action="store_true",
+                        help="Squash every model repo's history to one commit (the quota counts files in history)")
     parser.add_argument("--yes", action="store_true", help="Execute instead of printing what would happen")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -63,6 +66,14 @@ def main() -> None:
             if args.yes:
                 for d in old:
                     api.delete_folder(path_in_repo=d, repo_id=rid, commit_message=f"prune {d}")
+                api.super_squash_history(rid)
+
+    if args.squash:
+        for _, rid, kind in rows:
+            if kind == "model" and len(list(api.list_repo_commits(rid))) > 1:
+                logger.info("%s: %s history", rid, "squashing" if args.yes else "would squash")
+                if args.yes:
+                    api.super_squash_history(rid)
 
     if args.delete_matching:
         for gb, rid, kind in rows:

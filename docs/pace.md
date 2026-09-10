@@ -92,7 +92,9 @@ jobs died after training. The runner now uses `artifacts: {merged: local}` in `c
 
 If a merged model is missing locally when an evaluation is still needed, the runner re-invokes the trainer:
 OPD resumes from its final checkpoint and only merges, SFT retrains (12 minutes). `python scripts/hub_storage.py`
-reports storage per repo; `--prune-ckpts` and `--delete-matching smoke` reclaim space (dry run without `--yes`).
+reports storage per repo; `--prune-ckpts`, `--squash`, and `--delete-matching smoke` reclaim space (dry run without
+`--yes`). The quota counts every LFS file in a repo's git history, so deleting files or folders frees nothing
+until the history is squashed; the runner squashes a checkpoint repo after each prune.
 
 ## Adding a task or an OOD test set
 
