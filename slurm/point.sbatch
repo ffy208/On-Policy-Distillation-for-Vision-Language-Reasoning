@@ -8,8 +8,8 @@
 #SBATCH --cpus-per-task=6
 #SBATCH --mem-per-gpu=48G
 # No -p: Slurm uses the account's default partition (coc-gpu here; the ice-gpu H100 nodes are not open to it).
-# Override the GPU type on the command line, e.g. `sbatch --gres=gpu:l40s:1 slurm/point.sbatch` (L40S: 48 GB, 32 cards).
-#SBATCH --gres=gpu:a100:1
+# Override the GPU type on the command line, e.g. `sbatch --gres=gpu:a100:1 slurm/point.sbatch` (A100: 40 GB, only 8 cards; L40S: 48 GB, 32 cards).
+#SBATCH --gres=gpu:l40s:1
 #SBATCH -t 02:30:00              # OPD points take ~90 min; keep walltime short so the job backfills
 #SBATCH -o logs/%x-%j.out
 set -euo pipefail

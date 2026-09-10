@@ -3,7 +3,7 @@
 # Short walltime and small CPU/memory so it backfills quickly. Submit from the repository root:
 #   sbatch slurm/smoke.sbatch
 #SBATCH -J vlmopd-smoke
-#SBATCH --gres=gpu:a100:1
+#SBATCH --gres=gpu:l40s:1
 #SBATCH -N 1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
