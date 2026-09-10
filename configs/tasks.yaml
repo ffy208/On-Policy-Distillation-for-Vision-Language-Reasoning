@@ -9,6 +9,10 @@ defaults:
   sft: {max_steps: 302, lr: 1.0e-4, batch: 4, grad_accum: 4, lora_r: 64}
   opd: {total_steps: 150, batch_size: 16, micro_batch: 4, lr: 5.0e-5, ckpt_every: 25, kl_direction: reverse}
   eval: {gpu_mem: 0.85}
+  # Merged models (base + LoRA, ~4.3 GB each) stay on the local disk in `local` mode; only LoRA adapters and
+  # results go to the Hub. `hub` pushes every merged model (the notebook-era behaviour), which exhausts the
+  # 100 GB private-storage quota of a free Hub account after about twenty points.
+  artifacts: {merged: local}
 
 tasks:
   chartqa_human:

@@ -51,11 +51,33 @@ def test_commands_carry_the_config():
     assert "vlm_opd.evaluate" in e and "--split" in e
 
 
+def test_local_artifact_mode_keeps_merged_models_off_the_hub():
+    from vlm_opd.experiment import eval_model, merged_mode
+
+    cfg = load_tasks(TASKS_FILE)
+    d, t = cfg["defaults"], cfg["tasks"]["chartqa_human"]
+    assert merged_mode(d) == "local"
+    n = point_names("chartqa_human", t, d, "opd", 300, 1)
+    cmd = train_command("opd", n, t, d, 300, 1, d["student"], d["teacher"], None, None)
+    assert "--merged-repo" not in cmd and cmd[cmd.index("--ckpt-repo") + 1] == n.ckpt_repo
+    s = point_names("chartqa_human", t, d, "sft", 300, 1)
+    cmd = train_command("sft", s, t, d, 300, 1, d["student"], d["teacher"], None, None)
+    assert "--push-merged-repo" not in cmd and "--merge" in cmd
+    assert cmd[cmd.index("--push-adapter-repo") + 1] == "ffyang/vlm_opd_sft_chartqa_human_q300_s1_lora"
+    assert eval_model(n, d) == "ckpt/opd_chartqa_human_q300_s1/merged"
+    hub = {**d, "artifacts": {"merged": "hub"}}
+    assert eval_model(n, hub) == n.merged_repo
+    assert "--merged-repo" in train_command("opd", n, t, hub, 300, 1, d["student"], d["teacher"], None, None)
+    with pytest.raises(ValueError):
+        merged_mode({**d, "artifacts": {"merged": "s3"}})
+
+
 def test_dry_run_builds_train_then_eval(tmp_path):
     plan = run_point("chartqa_human", "opd", 100, 7, dry_run=True, opd_steps=5, skip_ood=True)
     modules = [c[2] for c in plan["commands"]]
     assert modules == ["vlm_opd.opd_trainer", "vlm_opd.evaluate"]
     assert plan["commands"][0][plan["commands"][0].index("--prompt-style") + 1] == "chart"
+    assert plan["commands"][1][plan["commands"][1].index("--model") + 1] == "ckpt/opd_chartqa_human_q100_s7/merged"
     with_ood = run_point("chartqa_human", "opd", 100, 7, dry_run=True, opd_steps=5)
     n_ood = len(load_tasks(TASKS_FILE)["tasks"]["chartqa_human"]["ood_eval"])
     assert [c[2] for c in with_ood["commands"]] == ["vlm_opd.opd_trainer"] + ["vlm_opd.evaluate"] * (1 + n_ood)

@@ -44,8 +44,31 @@ class PointNames:
     merged_repo: str
     ckpt_repo: str | None
 
+    @property
+    def merged_dir(self) -> str:
+        """Local merged model (base + LoRA) written by the trainer; used for evaluation in `local` artifact mode."""
+        return f"{self.out_dir}/merged"
+
+    @property
+    def adapter_repo(self) -> str:
+        """Small Hub repo holding only the final LoRA weights (SFT points; OPD keeps its adapter in ckpt_repo)."""
+        return self.merged_repo.replace("_merged", "_lora")
+
     def ood_result_name(self, ood_repo: str) -> str:
         return self.result_name.replace(".json", f"_on_{ood_repo.split('/')[-1]}.json")
+
+
+def merged_mode(defaults: dict[str, Any]) -> str:
+    """Where merged models live: `local` (scratch disk; only adapters go to the Hub) or `hub` (push ~4 GB per point)."""
+    mode = defaults.get("artifacts", {}).get("merged", "local")
+    if mode not in ("local", "hub"):
+        raise ValueError(f"artifacts.merged must be local or hub, got {mode!r}")
+    return mode
+
+
+def eval_model(names: PointNames, defaults: dict[str, Any]) -> str:
+    """Model argument for evaluation: the local merged directory or the Hub merged repo."""
+    return names.merged_dir if merged_mode(defaults) == "local" else names.merged_repo
 
 
 def point_names(task: str, task_cfg: dict[str, Any], defaults: dict[str, Any], method: str, budget: int, seed: int) -> PointNames:
@@ -78,19 +101,22 @@ def train_command(method: str, names: PointNames, task_cfg: dict[str, Any], defa
     """argv for the training module of one point."""
     py = sys.executable
     style = ["--prompt-style", task_cfg.get("prompt_style", "chart")]
+    local = merged_mode(defaults) == "local"
     if method == "sft":
         c = defaults["sft"]
+        publish = ["--merge", "--push-adapter-repo", names.adapter_repo] if local else ["--push-merged-repo", names.merged_repo]
         return [py, "-m", "vlm_opd.sft", *style, "--data-repo", task_cfg["sft_data_repo"], "--out-dir", names.out_dir,
                 "--model", student, "--max-question-index", str(budget), "--max-steps", str(sft_steps or c["max_steps"]),
                 "--lr", str(c["lr"]), "--batch", str(c["batch"]), "--grad-accum", str(c["grad_accum"]),
-                "--lora-r", str(c["lora_r"]), "--seed", str(seed), "--push-merged-repo", names.merged_repo]
+                "--lora-r", str(c["lora_r"]), "--seed", str(seed), *publish]
     c = defaults["opd"]
+    publish = [] if local else ["--merged-repo", names.merged_repo]
     return [py, "-m", "vlm_opd.opd_trainer", *style, "--data-repo", task_cfg["data_repo"], "--out-dir", names.out_dir,
             "--student", student, "--teacher", teacher, "--limit", str(budget),
             "--total-steps", str(opd_steps or c["total_steps"]), "--batch-size", str(c["batch_size"]),
             "--micro-batch", str(c["micro_batch"]), "--lr", str(c["lr"]), "--ckpt-every", str(c["ckpt_every"]),
             "--kl-direction", c["kl_direction"], "--seed", str(seed),
-            "--ckpt-repo", names.ckpt_repo or "", "--merged-repo", names.merged_repo]
+            "--ckpt-repo", names.ckpt_repo or "", *publish]
 
 
 def eval_command(model_repo: str, data_repo: str, out_path: str | Path, tag: str, seed: int, gpu_mem: float,
@@ -153,25 +179,36 @@ def run_point(task: str, method: str, budget: int, seed: int, tasks_file: str | 
         run(cmd, Path("logs") / f"{log_tag}.log")
         upload_small_file(out_dir / name, result_repo, token=token)
 
-    # in-distribution: train + evaluate as one unit keyed on the ID result
-    if dry_run or not result_on_hub(result_repo, names.result_name, token):
+    model = eval_model(names, defaults)
+    ood_sets = [] if skip_ood else list(task_cfg.get("ood_eval", []))
+    id_done = not dry_run and result_on_hub(result_repo, names.result_name, token)
+    ood_missing = [r for r in ood_sets if dry_run or not result_on_hub(result_repo, names.ood_result_name(r), token)]
+    # In local mode the merged model lives on this machine's disk; if it is gone but an evaluation is still
+    # needed, run the trainer again (OPD resumes from its final Hub checkpoint and only merges; SFT retrains).
+    need_model = (not id_done) or bool(ood_missing)
+    model_missing = merged_mode(defaults) == "local" and not Path(names.merged_dir).exists()
+    if not dry_run and id_done and not need_model:
+        plan["skipped"].append(names.result_name)
+        logger.info("skip %s: every result already on the Hub", names.tag)
+        return plan
+
+    if dry_run or not id_done or model_missing:
         cmd_train = train_command(method, names, task_cfg, defaults, budget, seed, student, teacher, sft_steps, opd_steps)
         plan["commands"].append(cmd_train)
         if not dry_run:
             run(cmd_train, Path("logs") / f"train_{names.tag}.log")
-        maybe(names.result_name, eval_command(names.merged_repo, task_cfg["data_repo"], out_dir / names.result_name,
-                                              names.tag, seed, defaults["eval"]["gpu_mem"],
-                                              task_cfg.get("prompt_style", "chart")), f"eval_{names.tag}")
+    if dry_run or not id_done:
+        maybe(names.result_name, eval_command(model, task_cfg["data_repo"], out_dir / names.result_name, names.tag, seed,
+                                              defaults["eval"]["gpu_mem"], task_cfg.get("prompt_style", "chart")),
+              f"eval_{names.tag}")
     else:
         plan["skipped"].append(names.result_name)
-        logger.info("skip training + ID eval for %s: result already on the Hub", names.tag)
 
-    if not skip_ood:
-        for ood_repo in task_cfg.get("ood_eval", []):
-            name = names.ood_result_name(ood_repo)
-            maybe(name, eval_command(names.merged_repo, ood_repo, out_dir / name, f"{names.tag}_on_{ood_repo.split('/')[-1]}",
-                                     seed, defaults["eval"]["gpu_mem"], task_cfg.get("prompt_style", "chart")),
-                  f"eval_{names.tag}_ood")
+    for ood_repo in ood_missing:
+        name = names.ood_result_name(ood_repo)
+        maybe(name, eval_command(model, ood_repo, out_dir / name, f"{names.tag}_on_{ood_repo.split('/')[-1]}",
+                                 seed, defaults["eval"]["gpu_mem"], task_cfg.get("prompt_style", "chart")),
+              f"eval_{names.tag}_ood")
     return plan
 
 

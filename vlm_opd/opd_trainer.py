@@ -65,6 +65,7 @@ class OPDConfig:
     teacher_model: str = TEACHER_MODEL
     ckpt_repo: str | None = None
     merged_repo: str | None = None
+    merge: bool = True  # write out_dir/merged (base + LoRA) for local evaluation even without a merged_repo
     batch_size: int = 8
     micro_batch: int = 4
     max_new_tokens: int = 512
@@ -333,14 +334,17 @@ def train(cfg: OPDConfig) -> dict[str, Any]:
     adapter_dir = out_dir / "adapter"
     student.save_pretrained(str(adapter_dir))
     processor.save_pretrained(str(adapter_dir))
-    if cfg.merged_repo:
+    merged_dir: Path | None = None
+    if cfg.merge or cfg.merged_repo:
         del teacher
         torch.cuda.empty_cache() if torch.cuda.is_available() else None
         from .sft import merge_and_save, push_dir
 
         merged_dir = merge_and_save(adapter_dir, out_dir / "merged", cfg.student_model)
-        push_dir(merged_dir, cfg.merged_repo, f"OPD merged weights, step {cfg.total_steps}")
-    return {"final_step": cfg.total_steps, "log_path": str(log_path), "adapter_dir": str(adapter_dir)}
+        if cfg.merged_repo:
+            push_dir(merged_dir, cfg.merged_repo, f"OPD merged weights, step {cfg.total_steps}")
+    return {"final_step": cfg.total_steps, "log_path": str(log_path), "adapter_dir": str(adapter_dir),
+            "merged_dir": str(merged_dir) if merged_dir else None}
 
 
 def main() -> None:
@@ -350,7 +354,8 @@ def main() -> None:
     parser.add_argument("--student", default=STUDENT_MODEL)
     parser.add_argument("--teacher", default=TEACHER_MODEL)
     parser.add_argument("--ckpt-repo", default=None)
-    parser.add_argument("--merged-repo", default=None)
+    parser.add_argument("--merged-repo", default=None, help="Push the merged model here (large: ~4 GB per run)")
+    parser.add_argument("--no-merge", action="store_true", help="Skip writing out_dir/merged")
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--micro-batch", type=int, default=4)
     parser.add_argument("--max-new-tokens", type=int, default=512)
@@ -372,7 +377,8 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     cfg = OPDConfig(
         data_repo=args.data_repo, out_dir=args.out_dir, student_model=args.student, teacher_model=args.teacher,
-        ckpt_repo=args.ckpt_repo, merged_repo=args.merged_repo, batch_size=args.batch_size,
+        ckpt_repo=args.ckpt_repo or None, merged_repo=args.merged_repo or None, merge=not args.no_merge,
+        batch_size=args.batch_size,
         micro_batch=args.micro_batch, max_new_tokens=args.max_new_tokens, temperature=args.temperature,
         top_p=args.top_p, kl_direction=args.kl_direction, learning_rate=args.lr, total_steps=args.total_steps,
         warmup_steps=args.warmup_steps, grad_clip=args.grad_clip, lora_r=args.lora_r, ckpt_every=args.ckpt_every,

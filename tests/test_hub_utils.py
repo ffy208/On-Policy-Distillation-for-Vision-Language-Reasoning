@@ -57,3 +57,13 @@ def test_prune_keeps_latest_only(tmp_path):
         save_ckpt(model, opt, step, "dummy/repo", local_dir=tmp_path, push=False, keep_local=1)
     remaining = sorted(p.name for p in tmp_path.glob("step_*"))
     assert remaining == ["step_000150"]
+
+
+def test_remote_steps_to_prune_keeps_newest():
+    from vlm_opd.hub_utils import remote_steps_to_prune
+
+    files = ["latest.txt", "opd_log.jsonl", "step_000025/adapter_model.safetensors", "step_000025/optimizer.pt",
+             "step_000050/adapter_model.safetensors", "step_000100/adapter_model.safetensors"]
+    assert remote_steps_to_prune(files, 1) == ["step_000025", "step_000050"]
+    assert remote_steps_to_prune(files, 2) == ["step_000025"]
+    assert remote_steps_to_prune(files, 0) == [] and remote_steps_to_prune(["latest.txt"], 1) == []

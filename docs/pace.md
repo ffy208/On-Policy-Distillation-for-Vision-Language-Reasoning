@@ -70,6 +70,22 @@ This writes `outputs/data_efficiency_chartqa_human.{json,md,png}` with per-seed 
 across-seed mean and standard deviation, a bootstrap interval pooled over questions of all seeds,
 and the OPD minus SFT paired bootstrap computed over the seeds both methods share.
 
+## What goes to the Hub
+
+A free Hub account has 100 GB of private storage, and the notebook-era policy (push every merged model, keep
+every checkpoint step) hit that cap after about twenty points: every later push failed with HTTP 400 and the
+jobs died after training. The runner now uses `artifacts: {merged: local}` in `configs/tasks.yaml`:
+
+- merged models (base + LoRA, 4.3 GB) are written to `ckpt/<point>/merged` on the cluster disk and evaluated
+  from there; nothing that large is pushed;
+- SFT points push only their LoRA adapter (`..._lora`, 0.3 GB); OPD points keep their adapter in the
+  checkpoint repo, which is pruned to the latest step after every push (0.8 GB per run);
+- results (small json) go to the results repo as before.
+
+If a merged model is missing locally when an evaluation is still needed, the runner re-invokes the trainer:
+OPD resumes from its final checkpoint and only merges, SFT retrains (12 minutes). `python scripts/hub_storage.py`
+reports storage per repo; `--prune-ckpts` and `--delete-matching smoke` reclaim space (dry run without `--yes`).
+
 ## Adding a task or an OOD test set
 
 `vlm_opd/prepare.py` has one adapter per source (`SOURCES`): `chartqa`, `geometry3k` (train + test),

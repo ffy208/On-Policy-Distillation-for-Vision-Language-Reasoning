@@ -211,6 +211,7 @@ def main() -> None:
                         help="Data budget in questions: keep rows whose question index is below N")
     parser.add_argument("--push-adapter-repo", type=str, default=None)
     parser.add_argument("--push-merged-repo", type=str, default=None, help="Also merge LoRA into the base and push")
+    parser.add_argument("--merge", action="store_true", help="Merge LoRA into the base under out_dir/merged without pushing")
     parser.add_argument("--prompt-style", type=str, default=DEFAULT_PROMPT_STYLE, choices=PROMPT_STYLES)
     args = parser.parse_args()
 
@@ -227,9 +228,10 @@ def main() -> None:
     adapter_dir = Path(args.out_dir) / "adapter"
     if args.push_adapter_repo:
         push_dir(adapter_dir, args.push_adapter_repo, "SFT LoRA adapter")
-    if args.push_merged_repo:
+    if args.merge or args.push_merged_repo:
         merged_dir = merge_and_save(adapter_dir, Path(args.out_dir) / "merged", args.model)
-        push_dir(merged_dir, args.push_merged_repo, "SFT merged weights")
+        if args.push_merged_repo:
+            push_dir(merged_dir, args.push_merged_repo, "SFT merged weights")
 
 
 if __name__ == "__main__":

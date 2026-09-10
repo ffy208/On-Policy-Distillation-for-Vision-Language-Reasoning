@@ -50,6 +50,7 @@ def save_ckpt(
     push: bool = True,
     token: str | None = None,
     keep_local: int = 1,
+    keep_remote: int = 1,
 ) -> Path:
     """Save one checkpoint locally and push it to the Hub.
 
@@ -64,6 +65,9 @@ def save_ckpt(
         push: When False, only save locally (unit tests / offline debugging).
         token: HF token; read automatically when None.
         keep_local: Maximum number of local step directories to keep (avoids filling Colab disk).
+        keep_remote: Maximum number of step directories to keep on the Hub (0 keeps all). Resume only
+            needs the latest one, and each step holds the LoRA weights plus optimizer state (~0.8 GB), so
+            private-storage quota is what this protects.
 
     Returns:
         Path of the local checkpoint directory.
@@ -104,9 +108,32 @@ def save_ckpt(
             commit_message=f"update latest -> {step}",
         )
         logger.info("Checkpoint step %d pushed to Hub repo %s", step, repo_id)
+        if keep_remote > 0:
+            prune_remote(repo_id, keep_remote, token=token)
 
     _prune_local(local_dir, keep_local)
     return ckpt_dir
+
+
+def remote_steps_to_prune(files: list[str], keep: int) -> list[str]:
+    """Step directories present in a repo file list, oldest first, except the newest `keep`."""
+    dirs = sorted({f.split("/", 1)[0] for f in files if f.startswith("step_") and "/" in f})
+    return dirs[:-keep] if keep > 0 else []
+
+
+def prune_remote(repo_id: str, keep: int = 1, token: str | None = None) -> list[str]:
+    """Delete all but the newest `keep` step directories from a Hub checkpoint repo. Returns what was removed."""
+    api = HfApi(token=token or get_hf_token())
+    try:
+        old = remote_steps_to_prune(api.list_repo_files(repo_id), keep)
+        for d in old:
+            api.delete_folder(path_in_repo=d, repo_id=repo_id, commit_message=f"prune {d}")
+    except Exception as e:  # noqa: BLE001 - pruning is housekeeping; never fail training over it
+        logger.warning("Could not prune old checkpoints in %s: %s", repo_id, e)
+        return []
+    if old:
+        logger.info("Pruned %s from %s", ", ".join(old), repo_id)
+    return old
 
 
 def _prune_local(local_dir: Path, keep: int) -> None:
