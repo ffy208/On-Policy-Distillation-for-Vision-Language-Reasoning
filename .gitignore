@@ -27,8 +27,9 @@ temp/
 .ipynb_checkpoints/
 .DS_Store
 
-# Outputs: keep small json/figures, ignore large files
-outputs/**/*.jsonl
+# Outputs: every result is pushed to the Hub results repo, so nothing under outputs/ is tracked
+outputs/*
+!outputs/.gitkeep
 
 # Claude Code session logs
 .claude/logs/
