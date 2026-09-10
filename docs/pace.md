@@ -28,9 +28,13 @@ export HF_HOME=$SCRATCH/hf_cache
 ## Smoke test (about 15 minutes on one A100)
 
 ```bash
-sbatch --export=ALL,TASK=chartqa_human,METHOD=opd,BUDGET=100,SEED=99,EXTRA_ARGS="--opd-steps 5 --skip-ood" slurm/point.sbatch
-tail -f logs/vlmopd-<jobid>.out
+sbatch slurm/smoke.sbatch          # 5 OPD steps on 100 questions, seed 99, 45-minute walltime
+tail -f logs/vlmopd-smoke-<jobid>.out
 ```
+
+Walltimes are deliberately short (smoke 45 min, OPD points 2.5 h, SFT points 1 h): on a busy
+partition short jobs backfill into gaps that long jobs cannot use. A pending reason of
+`ReqNodeNotAvail, May be reserved for other job` with free `mixed` nodes usually means exactly that.
 
 A seed other than 42 produces fresh Hub repo names (`ffyang/vlm_opd_opd_chartqa_human_q100_s99_*`) and
 does not touch the notebook-era results. Delete those Hub repos afterwards or keep them as a record.

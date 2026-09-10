@@ -5,11 +5,11 @@
 #SBATCH -J vlmopd
 #SBATCH -N 1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --cpus-per-task=6
+#SBATCH --mem=48G
 #SBATCH -p ice-gpu               # PACE ICE GPU partition; verify with `sinfo -o "%P %G %D" | grep -i gpu`
 #SBATCH --gres=gpu:h100:1        # lowercase on ICE; alternatives: gpu:a100:1 (40 GB, only 8 cards), gpu:h200:1. No -A line needed
-#SBATCH -t 04:00:00
+#SBATCH -t 02:30:00              # OPD points take ~90 min; keep walltime short so the job backfills
 #SBATCH -o logs/%x-%j.out
 set -euo pipefail
 

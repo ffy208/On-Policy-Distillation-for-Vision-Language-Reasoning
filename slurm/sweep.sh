@@ -7,6 +7,6 @@ BUDGETS="${2:-100 300 900 3000}"
 SEEDS="${3:-42}"
 METHODS="${4:-sft opd}"
 for b in $BUDGETS; do for s in $SEEDS; do for m in $METHODS; do
-  t=$([ "$m" = "opd" ] && echo "04:00:00" || echo "01:30:00")
+  t=$([ "$m" = "opd" ] && echo "02:30:00" || echo "01:00:00")
   sbatch -t "$t" -J "${m}_${TASK}_q${b}_s${s}" --export=ALL,TASK="$TASK",METHOD="$m",BUDGET="$b",SEED="$s" slurm/point.sbatch
 done; done; done
