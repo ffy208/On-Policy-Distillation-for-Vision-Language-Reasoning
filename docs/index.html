@@ -196,7 +196,7 @@
     <div>
       <p class="kicker rv">Independent research project · on-policy distillation · Qwen3-VL</p>
       <h1 class="rv">Teach a small <em>vision-language</em> model on its own mistakes</h1>
-      <p class="lede rv">On-policy distillation lets a 2B student learn from an 8B teacher on the states the student actually visits. On ChartQA, <b>300 questions of OPD match supervised distillation on 3,000</b>, and a token-level analysis shows the teacher's feedback lands on answers and format long before it lands on what the model reads off the chart.</p>
+      <p class="lede rv">On-policy distillation lets a 2B student learn from an 8B teacher on the states the student actually visits. On ChartQA, <b>300 questions of OPD match supervised distillation on 3,000 (three seeds)</b>, and a token-level analysis shows the teacher's feedback lands on answers and format long before it lands on what the model reads off the chart.</p>
       <div class="meta rv">
         <a href="https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning">Code</a>
         <a href="https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning/blob/main/docs/resume_log.md">Measurement log</a>
@@ -207,11 +207,11 @@
     </div>
     <div class="scale rv">
       <p class="t"><span>Relaxed accuracy · 500 held-out questions</span><span>95% CI</span></p>
-      <svg id="scaleSvg" viewBox="0 0 520 150" aria-label="Accuracy scale from 0.64 to 0.88 showing student zero-shot 0.668, SFT on 3000 questions 0.834, OPD on 300 questions 0.836 and teacher 0.844"></svg>
+      <svg id="scaleSvg" viewBox="0 0 520 150" aria-label="Accuracy scale from 0.64 to 0.88 showing student zero-shot 0.668, SFT on 3000 questions 0.834, OPD on 300 questions 0.827 (mean of three seeds) and teacher 0.844"></svg>
       <div class="foot">
         <div><div class="v c-base">0.668</div><div class="k">Student<br>zero-shot</div></div>
         <div><div class="v c-sft">0.834</div><div class="k">SFT<br>3,000 questions</div></div>
-        <div><div class="v c-opd">0.836</div><div class="k">OPD<br>300 questions</div></div>
+        <div><div class="v c-opd">0.827</div><div class="k">OPD<br>300 questions · 3 seeds</div></div>
         <div><div class="v c-teach">0.844</div><div class="k">Teacher<br>zero-shot</div></div>
       </div>
     </div>
@@ -235,7 +235,7 @@
 <section id="setup">
   <div class="sec-head rv"><div class="sec-num"><b>02</b>Setup</div><h2>One student, one teacher, one GPU, one fixed test set</h2></div>
   <div class="body rv">
-    <div class="side">Everything below is scored the same way: relaxed accuracy on the same 500 human-written ChartQA questions, seed 42.</div>
+    <div class="side">Everything below is scored the same way: relaxed accuracy on the same 500 human-written ChartQA questions; seeds change only the training data order and rollout sampling.</div>
     <div class="main">
       <div class="cards-3">
         <div class="card"><h4>Student</h4><div class="big">2B</div><div class="sub">Qwen3-VL-2B-Instruct · LoRA r=64 on the language model · 69.7M trainable (3.17%) · vision tower frozen</div></div>
@@ -262,12 +262,13 @@
       <div class="tbl"><table>
         <thead><tr><th>Training questions</th><th class="n">SFT</th><th class="n">OPD</th><th class="n">OPD − SFT, paired 95% CI</th></tr></thead>
         <tbody>
-          <tr class="hl"><td>300 (10%)</td><td class="n">0.778 <span class="ci">[0.742, 0.814]</span></td><td class="n">0.836 <span class="ci">[0.804, 0.868]</span></td><td class="n pos">+0.058 [+0.028, +0.088]</td></tr>
+          <tr class="hl"><td>100 (3%) · 3 seeds</td><td class="n">0.793 <span class="ci">[0.775, 0.810]</span></td><td class="n">0.810 <span class="ci">[0.790, 0.830]</span></td><td class="n pos">+0.025 [+0.007, +0.042]</td></tr>
+          <tr class="hl"><td>300 (10%) · 3 seeds</td><td class="n">0.799 <span class="ci">[0.782, 0.817]</span></td><td class="n">0.827 <span class="ci">[0.807, 0.845]</span></td><td class="n pos">+0.029 [+0.013, +0.046]</td></tr>
           <tr><td>900 (30%)</td><td class="n">0.808 <span class="ci">[0.774, 0.842]</span></td><td class="n">0.820 <span class="ci">[0.786, 0.854]</span></td><td class="n neu">+0.012 [−0.016, +0.040]</td></tr>
           <tr><td>3,000 (100%)</td><td class="n">0.834 <span class="ci">[0.802, 0.866]</span></td><td class="n">0.824 <span class="ci">[0.790, 0.858]</span></td><td class="n neu">−0.010 [−0.036, +0.016]</td></tr>
         </tbody>
       </table></div>
-      <p style="margin-top:18px">At 300 questions OPD beats SFT by 5.8 points and the paired interval excludes zero; the 300-question OPD student sits within noise of the teacher. Because 300 was the smallest budget tested, the true crossover is at or below 10% of the data.</p>
+      <p style="margin-top:18px">The 100- and 300-question points are averaged over three seeds (seed = data order and rollout sampling; the test set is fixed), with intervals pooled over questions and deltas paired by seed. OPD leads by 2.5 and 2.9 points and both intervals exclude zero. OPD on 100 questions (0.810) matches SFT on 900 (0.808). The first single-seed run had shown +5.8 at 300 questions; that seed turned out to be the weakest of four SFT draws, so the multi-seed estimate is the one to quote. OPD's across-seed spread (sd 0.008 to 0.010) is about half of SFT's (0.015 to 0.022).</p>
     </div>
   </div>
 </section>
@@ -278,7 +279,7 @@
     <div class="side">The expected shape, and the honest one.</div>
     <div class="main">
       <p>At 900 and 3,000 questions the paired differences are +1.2 and −1.0 points, both inside their intervals. The full-data SFT student is already within one point of the 8B teacher, so there is nothing left for OPD to add on this task with this teacher. Separating the methods at full data would need a stronger teacher or a harder test set, not more steps.</p>
-      <p>Two caveats stated plainly. All runs use a single seed. The 3,000-question OPD run covers each question less than once (2,400 rollouts), so it is undertrained relative to SFT's two epochs; the fixed-update design was deliberate, but it favours SFT at the largest budget.</p>
+      <p>Two caveats stated plainly. The 900- and 3,000-question points are single-seed. The 3,000-question OPD run covers each question less than once (2,400 rollouts), so it is undertrained relative to SFT's two epochs; the fixed-update design was deliberate, but it favours SFT at the largest budget.</p>
     </div>
   </div>
 </section>
@@ -343,7 +344,7 @@
     <div class="side">Kept short on purpose.</div>
     <div class="main">
       <ul>
-        <li>One task, one model family, one seed. The 5.8-point low-data result has a paired interval that excludes zero, but a multi-seed repeat is the obvious next check.</li>
+        <li>One task, one model family. The low-data result now rests on three seeds at two budgets; the saturation points are still single-seed, and a second task (Geometry3K) and out-of-distribution chart sets are in progress.</li>
         <li>Token roles are heuristic (line-level cues and digit detection); the "text" class mixes structural tokens with reasoning words.</li>
         <li>Only the vanilla OPD objective was run. The 2026 re-weighted variants (visual-advantage weighting, gradient steering, Fisher projection) are not compared.</li>
         <li>Full-data results are ceiling-limited by an 8B teacher on ChartQA.</li>
@@ -415,7 +416,7 @@ pytest</code></pre>
     const marks = [
       { v: 0.668, lo: 0.626, hi: 0.710, c: css("--base"), l: "zero-shot", y: 108, side: -1 },
       { v: 0.834, lo: 0.802, hi: 0.866, c: css("--sft"), l: "SFT 3,000 q", y: 58, side: -1 },
-      { v: 0.836, lo: 0.804, hi: 0.868, c: css("--opd"), l: "OPD 300 q", y: 30, side: 1 },
+      { v: 0.827, lo: 0.807, hi: 0.845, c: css("--opd"), l: "OPD 300 q · 3 seeds", y: 30, side: 1 },
       { v: 0.844, lo: 0.812, hi: 0.876, c: css("--teach"), l: "teacher", y: 128, side: 1 },
     ];
     el("line", { x1: x0, x2: x1, y1: 78, y2: 78, stroke: css("--line-2"), "stroke-width": 1 }, svg);
@@ -441,12 +442,12 @@ pytest</code></pre>
   (function de() {
     const svg = document.getElementById("deSvg"), tip = document.getElementById("deTip"); if (!svg) return;
     const W = 760, H = 360, L = 58, R = 24, T = 18, B = 44;
-    const xs = [300, 900, 3000], lo = 0.62, hi = 0.89;
-    const X = q => L + (Math.log10(q) - Math.log10(250)) / (Math.log10(3600) - Math.log10(250)) * (W - L - R);
+    const xs = [100, 300, 900, 3000], lo = 0.62, hi = 0.89;
+    const X = q => L + (Math.log10(q) - Math.log10(80)) / (Math.log10(3600) - Math.log10(80)) * (W - L - R);
     const Y = v => T + (hi - v) / (hi - lo) * (H - T - B);
     const series = {
-      sft: { c: css("--sft"), pts: [[300, .778, .742, .814], [900, .808, .774, .842], [3000, .834, .802, .866]], name: "SFT" },
-      opd: { c: css("--opd"), pts: [[300, .836, .804, .868], [900, .820, .786, .854], [3000, .824, .790, .858]], name: "OPD" },
+      sft: { c: css("--sft"), pts: [[100, .793, .775, .810], [300, .799, .782, .817], [900, .808, .774, .842], [3000, .834, .802, .866]], name: "SFT" },
+      opd: { c: css("--opd"), pts: [[100, .810, .790, .830], [300, .827, .807, .845], [900, .820, .786, .854], [3000, .824, .790, .858]], name: "OPD" },
     };
     const grid = el("g", { class: "grid" }, svg), axis = el("g", { class: "axis" }, svg);
     for (let v = 0.65; v <= 0.88; v += 0.05) {
