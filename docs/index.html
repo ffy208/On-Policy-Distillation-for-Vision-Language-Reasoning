@@ -262,13 +262,13 @@
       <div class="tbl"><table>
         <thead><tr><th>Training questions</th><th class="n">SFT</th><th class="n">OPD</th><th class="n">OPD − SFT, paired 95% CI</th></tr></thead>
         <tbody>
-          <tr class="hl"><td>100 (3%) · 3 seeds</td><td class="n">0.793 <span class="ci">[0.775, 0.810]</span></td><td class="n">0.810 <span class="ci">[0.790, 0.830]</span></td><td class="n pos">+0.025 [+0.007, +0.042]</td></tr>
+          <tr class="hl"><td>100 (3%) · 4 seeds</td><td class="n">0.793 <span class="ci">[0.775, 0.810]</span></td><td class="n">0.811 <span class="ci">[0.794, 0.829]</span></td><td class="n pos">+0.018 [+0.004, +0.034]</td></tr>
           <tr class="hl"><td>300 (10%) · 3 seeds</td><td class="n">0.799 <span class="ci">[0.782, 0.817]</span></td><td class="n">0.827 <span class="ci">[0.807, 0.845]</span></td><td class="n pos">+0.029 [+0.013, +0.046]</td></tr>
           <tr><td>900 (30%)</td><td class="n">0.808 <span class="ci">[0.774, 0.842]</span></td><td class="n">0.820 <span class="ci">[0.786, 0.854]</span></td><td class="n neu">+0.012 [−0.016, +0.040]</td></tr>
           <tr><td>3,000 (100%)</td><td class="n">0.834 <span class="ci">[0.802, 0.866]</span></td><td class="n">0.824 <span class="ci">[0.790, 0.858]</span></td><td class="n neu">−0.010 [−0.036, +0.016]</td></tr>
         </tbody>
       </table></div>
-      <p style="margin-top:18px">The 100- and 300-question points are averaged over three seeds (seed = data order and rollout sampling; the test set is fixed), with intervals pooled over questions and deltas paired by seed. OPD leads by 2.5 and 2.9 points and both intervals exclude zero. OPD on 100 questions (0.810) matches SFT on 900 (0.808). The first single-seed run had shown +5.8 at 300 questions; that seed turned out to be the weakest of four SFT draws, so the multi-seed estimate is the one to quote. OPD's across-seed spread (sd 0.008 to 0.010) is about half of SFT's (0.015 to 0.022).</p>
+      <p style="margin-top:18px">The 100-question point is averaged over four seeds and the 300-question point over three (seed = data order and rollout sampling; the test set is fixed), with intervals pooled over questions and deltas paired by seed. OPD leads by 1.8 and 2.9 points and both intervals exclude zero. OPD on 100 questions (0.811) matches SFT on 900 (0.808). The first single-seed run had shown +5.8 at 300 questions; that seed turned out to be the weakest of four SFT draws, so the multi-seed estimate is the one to quote. OPD's across-seed spread (sd 0.008 to 0.009) is about half of SFT's (0.015 to 0.022).</p>
     </div>
   </div>
 </section>
@@ -344,7 +344,7 @@
     <div class="side">Kept short on purpose.</div>
     <div class="main">
       <ul>
-        <li>One task, one model family. The low-data result now rests on three seeds at two budgets; the saturation points are still single-seed, and a second task (Geometry3K) and out-of-distribution chart sets are in progress.</li>
+        <li>One task, one model family. The low-data result now rests on three to four seeds at two budgets; the saturation points are still single-seed, and a second task (Geometry3K) and out-of-distribution chart sets are in progress.</li>
         <li>Token roles are heuristic (line-level cues and digit detection); the "text" class mixes structural tokens with reasoning words.</li>
         <li>Only the vanilla OPD objective was run. The 2026 re-weighted variants (visual-advantage weighting, gradient steering, Fisher projection) are not compared.</li>
         <li>Full-data results are ceiling-limited by an 8B teacher on ChartQA.</li>
@@ -447,7 +447,7 @@ pytest</code></pre>
     const Y = v => T + (hi - v) / (hi - lo) * (H - T - B);
     const series = {
       sft: { c: css("--sft"), pts: [[100, .793, .775, .810], [300, .799, .782, .817], [900, .808, .774, .842], [3000, .834, .802, .866]], name: "SFT" },
-      opd: { c: css("--opd"), pts: [[100, .810, .790, .830], [300, .827, .807, .845], [900, .820, .786, .854], [3000, .824, .790, .858]], name: "OPD" },
+      opd: { c: css("--opd"), pts: [[100, .811, .794, .829], [300, .827, .807, .845], [900, .820, .786, .854], [3000, .824, .790, .858]], name: "OPD" },
     };
     const grid = el("g", { class: "grid" }, svg), axis = el("g", { class: "axis" }, svg);
     for (let v = 0.65; v <= 0.88; v += 0.05) {
