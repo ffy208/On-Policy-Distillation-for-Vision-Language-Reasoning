@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# One experiment point on one A100. Submit with environment variables, e.g.
+# One experiment point on one GPU. Submit from the repository root with environment variables, e.g.
 #   sbatch --export=ALL,TASK=chartqa_human,METHOD=opd,BUDGET=300,SEED=1 slurm/point.sbatch
 # Idempotent: resubmitting a killed job resumes OPD from its Hub checkpoint and skips finished results.
 #SBATCH -J vlmopd
 #SBATCH -N 1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=6
-#SBATCH --mem=48G
-#SBATCH -p ice-gpu               # PACE ICE GPU partition; verify with `sinfo -o "%P %G %D" | grep -i gpu`
-#SBATCH --gres=gpu:h100:1        # lowercase on ICE; alternatives: gpu:a100:1 (40 GB, only 8 cards), gpu:h200:1. No -A line needed
+#SBATCH --mem-per-gpu=48G
+# No -p: Slurm uses the account's default partition (coc-gpu here; the ice-gpu H100 nodes are not open to it).
+# Override the GPU type on the command line, e.g. `sbatch --gres=gpu:l40s:1 slurm/point.sbatch` (L40S: 48 GB, 32 cards).
+#SBATCH --gres=gpu:a100:1
 #SBATCH -t 02:30:00              # OPD points take ~90 min; keep walltime short so the job backfills
 #SBATCH -o logs/%x-%j.out
 set -euo pipefail
