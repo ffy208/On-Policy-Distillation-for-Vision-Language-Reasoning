@@ -227,7 +227,10 @@ def main() -> None:
     )
     adapter_dir = Path(args.out_dir) / "adapter"
     if args.push_adapter_repo:
-        push_dir(adapter_dir, args.push_adapter_repo, "SFT LoRA adapter")
+        try:
+            push_dir(adapter_dir, args.push_adapter_repo, "SFT LoRA adapter")
+        except Exception as e:  # noqa: BLE001 - the adapter stays on disk; evaluation does not need the push
+            logger.warning("Adapter push to %s failed (%s); continuing", args.push_adapter_repo, type(e).__name__)
     if args.merge or args.push_merged_repo:
         merged_dir = merge_and_save(adapter_dir, Path(args.out_dir) / "merged", args.model)
         if args.push_merged_repo:

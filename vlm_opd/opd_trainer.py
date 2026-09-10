@@ -327,9 +327,15 @@ def train(cfg: OPDConfig) -> dict[str, Any]:
         )
 
         if cfg.ckpt_repo and (step % cfg.ckpt_every == 0 or step == cfg.total_steps):
-            save_ckpt(student, optimizer, step, cfg.ckpt_repo, out_dir / "ckpt", scheduler=scheduler,
-                      extra_state={"cursor": cursor, "epoch": epoch, "config": asdict(cfg)}, token=token)
-            upload_small_file(log_path, cfg.ckpt_repo, path_in_repo="opd_log.jsonl", token=token)
+            # A checkpoint push only buys resumability; a Hub failure (quota, outage) must not kill the run,
+            # because the merged model and the evaluation do not depend on it.
+            try:
+                save_ckpt(student, optimizer, step, cfg.ckpt_repo, out_dir / "ckpt", scheduler=scheduler,
+                          extra_state={"cursor": cursor, "epoch": epoch, "config": asdict(cfg)}, token=token)
+                upload_small_file(log_path, cfg.ckpt_repo, path_in_repo="opd_log.jsonl", token=token)
+            except Exception as e:  # noqa: BLE001 - see comment above
+                logger.warning("Checkpoint push at step %d failed (%s: %s); continuing without it", step, type(e).__name__,
+                               str(e).splitlines()[-1] if str(e) else "")
 
     adapter_dir = out_dir / "adapter"
     student.save_pretrained(str(adapter_dir))
