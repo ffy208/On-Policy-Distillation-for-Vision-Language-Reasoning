@@ -14,11 +14,11 @@ Student: `Qwen/Qwen3-VL-2B-Instruct` (LoRA rank 64 on the language model, vision
 |---|---|
 | Student, zero-shot | 0.668 [0.626, 0.710] |
 | SFT on 3000 questions (2402 verified teacher solutions, 2 epochs) | 0.834 [0.802, 0.866] |
-| OPD on 300 questions (2400 rollouts), mean of 3 seeds | 0.827 [0.807, 0.845] |
+| OPD on 300 questions (2400 rollouts), mean of 4 seeds | 0.826 [0.810, 0.843] |
 | Teacher, zero-shot | 0.844 [0.812, 0.876] |
 
-1. **Is OPD stronger than SFT on multimodal reasoning?** In the low-data regime, yes: OPD beats SFT by 1.8 points at 100 training questions (4 seeds) and by 2.9 points at 300 (3 seeds); paired bootstrap 95% CIs +0.4 to +3.4 and +1.3 to +4.6. At 900 and 3000 questions both methods saturate at the teacher ceiling and the differences are within noise.
-2. **Is OPD more data-efficient?** Yes. OPD with 10% of the questions (0.827, 3 seeds) sits within the interval of SFT trained on all of them (0.834), and OPD on 100 questions (0.811, 4 seeds) matches SFT on 900 (0.808), reproducing the data-efficiency claim of Agarwal et al. (2024) in the vision-language setting.
+1. **Is OPD stronger than SFT on multimodal reasoning?** In the low-data regime, yes: over four seeds OPD beats SFT by 1.8 points at 100 training questions and by 2.7 points at 300; paired bootstrap 95% CIs +0.4 to +3.4 and +1.3 to +4.2. At 900 and 3000 questions both methods saturate at the teacher ceiling and the differences are within noise.
+2. **Is OPD more data-efficient?** Yes. OPD with 10% of the questions (0.826, 4 seeds) sits within the interval of SFT trained on all of them (0.834), and OPD on 100 questions (0.811, 4 seeds) matches SFT on 900 (0.808), reproducing the data-efficiency claim of Agarwal et al. (2024) in the vision-language setting.
 3. **Where does the teacher's token-level feedback land?** Not on chart-reading digits. Before training, the final-answer line receives 2.7x its length share of the teacher's KL; after OPD that drops to 0.4x, mean per-token KL halves, and the residual feedback shifts toward chart values.
 
 All numbers come from the json files in the private Hub repo `ffyang/vlm_opd_results`; the measurable record per stage is in [docs/resume_log.md](docs/resume_log.md).
@@ -50,11 +50,11 @@ All numbers come from the json files in the private Hub repo `ffyang/vlm_opd_res
 | Training questions | SFT (302 steps) | OPD (150 steps x batch 16) | OPD - SFT, paired 95% CI |
 |---|---|---|---|
 | 100 (3%) | 0.793 [0.775, 0.810], 4 seeds, sd 0.022 | 0.811 [0.794, 0.829], 4 seeds, sd 0.009 | +0.018 [+0.004, +0.034] over 4 seeds |
-| 300 (10%) | 0.799 [0.782, 0.817], 4 seeds, sd 0.015 | 0.827 [0.807, 0.845], 3 seeds, sd 0.008 | +0.029 [+0.013, +0.046] over 3 shared seeds |
+| 300 (10%) | 0.799 [0.782, 0.817], 4 seeds, sd 0.015 | 0.826 [0.810, 0.843], 4 seeds, sd 0.007 | +0.027 [+0.013, +0.042] over 4 seeds |
 | 900 (30%) | 0.808 [0.774, 0.842], 1 seed | 0.820 [0.786, 0.854], 1 seed | +0.012 [-0.016, +0.040] |
 | 3000 (100%) | 0.834 [0.802, 0.866], 1 seed | 0.824 [0.790, 0.858], 1 seed | -0.010 [-0.036, +0.016] |
 
-Intervals are bootstrap over questions pooled across seeds; the paired delta is computed over the seeds both methods share (seed = data order and rollout sampling; the test set is fixed). Per-seed accuracies at 100 questions: SFT 0.816 / 0.778 / 0.808 / 0.770, OPD 0.816 / 0.810 / 0.820 / 0.800; at 300: SFT 0.778 / 0.814 / 0.806 / 0.800, OPD 0.836 / 0.820 / 0.824. The original single-seed run (seed 42, SFT 0.778 vs OPD 0.836, +5.8) was the most favourable draw; the three-seed estimate is smaller but its interval excludes zero at both budgets. OPD's across-seed spread is about half of SFT's.
+Intervals are bootstrap over questions pooled across seeds; the paired delta is computed over the seeds both methods share (seed = data order and rollout sampling; the test set is fixed). Per-seed accuracies at 100 questions: SFT 0.816 / 0.778 / 0.808 / 0.770, OPD 0.816 / 0.810 / 0.820 / 0.800; at 300: SFT 0.778 / 0.814 / 0.806 / 0.800, OPD 0.836 / 0.820 / 0.826 / 0.824. The original single-seed run (seed 42, SFT 0.778 vs OPD 0.836, +5.8) was the most favourable draw; the four-seed estimate is smaller but its interval excludes zero at both budgets. OPD's across-seed spread is about half of SFT's.
 
 Update counts are fixed across budgets so data quantity is the only variable: SFT runs 302 optimizer steps everywhere (2 epochs at 3000), OPD runs 150 steps of batch 16 everywhere. Caveats: 900 and 3000 remain single-seed; the 3000-question OPD run covers each question less than once, so it is undertrained relative to SFT's 2 epochs. The 100- and 300-question points were run on Georgia Tech PACE (L40S, 13.5 s per OPD step); the others on Colab (A100).
 
@@ -219,5 +219,5 @@ OPD for LLMs: MiniLLM and GKD (Agarwal et al., 2024); Thinking Machines' 2025 wr
 - [x] Stage 2: OPD trainer with Hub checkpoints and verified resume
 - [x] Stage 3: data-efficiency curve; OPD at 10% data matches full-data SFT
 - [x] Stage 4: token-level feedback before and after OPD
-- [x] 100-question point and seeds at 100 (4) and 300 (3) (PACE, 2026-09-10): OPD's advantage holds at +1.8 and +2.9 points with intervals excluding zero
+- [x] 100-question point and 4 seeds at 100 and 300 (PACE, 2026-09-10): OPD's advantage holds at +1.8 and +2.7 points with intervals excluding zero
 - [ ] Optional: forward-KL ablation; longer OPD run at 3000 questions; seeds at 900 and 3000; Geometry3K curve; OOD evaluation on CharXiv and ChartQAPro; self-distillation conditions
