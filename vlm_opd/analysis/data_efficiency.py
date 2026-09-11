@@ -228,13 +228,18 @@ def main() -> None:
     parser.add_argument("--task", default="chartqa_human")
     parser.add_argument("--budgets", type=int, nargs="+", default=[100, 300, 900, 3000])
     parser.add_argument("--out-dir", default="outputs")
-    parser.add_argument("--baseline", default="outputs/eval_student_zeroshot.json")
-    parser.add_argument("--teacher", default="outputs/eval_teacher_zeroshot.json")
+    parser.add_argument("--baseline", default=None, help="Zero-shot student result (default: the task's baseline file)")
+    parser.add_argument("--teacher", default=None, help="Zero-shot teacher result (default: the task's baseline file)")
     parser.add_argument("--n-boot", type=int, default=10000)
     parser.add_argument("--exclude-seeds", type=int, nargs="*", default=list(SMOKE_SEEDS),
                         help="Seeds to ignore (default: the smoke-test seed 99)")
     args = parser.parse_args()
-    table = collect_seeded(args.out_dir, args.task, args.budgets, args.baseline, args.teacher, args.n_boot,
+    from ..experiment import baseline_result_name, load_tasks
+
+    task_cfg = load_tasks()["tasks"].get(args.task, {})
+    baseline = args.baseline or str(Path(args.out_dir) / baseline_result_name(args.task, task_cfg, "student"))
+    teacher = args.teacher or str(Path(args.out_dir) / baseline_result_name(args.task, task_cfg, "teacher"))
+    table = collect_seeded(args.out_dir, args.task, args.budgets, baseline, teacher, args.n_boot,
                            exclude_seeds=tuple(args.exclude_seeds))
     out = Path(args.out_dir)
     (out / f"data_efficiency_{args.task}.json").write_text(json.dumps(table, indent=2))

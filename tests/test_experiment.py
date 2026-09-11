@@ -82,3 +82,21 @@ def test_dry_run_builds_train_then_eval(tmp_path):
     n_ood = len(load_tasks(TASKS_FILE)["tasks"]["chartqa_human"]["ood_eval"])
     assert [c[2] for c in with_ood["commands"]] == ["vlm_opd.opd_trainer"] + ["vlm_opd.evaluate"] * (1 + n_ood)
     assert "5" == plan["commands"][0][plan["commands"][0].index("--total-steps") + 1]
+
+
+def test_baseline_method_evaluates_both_models_on_every_set():
+    from vlm_opd.experiment import baseline_result_name
+
+    cfg = load_tasks(TASKS_FILE)
+    t = cfg["tasks"]["chartqa_human"]
+    assert baseline_result_name("chartqa_human", t, "student") == "eval_student_zeroshot.json"
+    assert baseline_result_name("chartqa_human", t, "teacher", "ffyang/vlm_opd_ood_charxiv") == "eval_teacher_zeroshot_on_vlm_opd_ood_charxiv.json"
+    g = cfg["tasks"]["geometry3k"]
+    assert baseline_result_name("geometry3k", g, "student") == "eval_zeroshot_student_geometry3k.json"
+    plan = run_point("chartqa_human", "baseline", 0, 42, dry_run=True)
+    n_ood = len(t["ood_eval"])
+    assert len(plan["commands"]) == 2 * (1 + n_ood) and all(c[2] == "vlm_opd.evaluate" for c in plan["commands"])
+    models = {c[c.index("--model") + 1] for c in plan["commands"]}
+    assert models == {cfg["defaults"]["student"], cfg["defaults"]["teacher"]}
+    plan = run_point("geometry3k", "baseline", 0, 42, dry_run=True, skip_ood=True)
+    assert len(plan["commands"]) == 2 and plan["commands"][0][plan["commands"][0].index("--prompt-style") + 1] == "geometry"

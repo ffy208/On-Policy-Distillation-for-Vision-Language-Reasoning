@@ -173,6 +173,7 @@ vlm_opd/
   opd_trainer.py    on-policy distillation loop: rollout -> teacher/student scoring -> KL -> LoRA update
   analysis/stats.py            bootstrap intervals and paired bootstrap deltas
   analysis/data_efficiency.py  accuracy-vs-questions table, crossover point, figure, report
+  analysis/ood.py              out-of-distribution table per held-out set (zero-shot rows, SFT/OPD per budget, paired delta)
   analysis/token_feedback.py   student rollouts scored by both models: per-token reverse KL and log-ratio
   analysis/token_classes.py    token roles, per-class aggregation, digit-position statistics
   analysis/heatmap.py          token heatmap and per-class bar chart rendering

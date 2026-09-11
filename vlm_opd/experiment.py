@@ -28,6 +28,14 @@ logger = logging.getLogger(__name__)
 
 TASKS_FILE = Path(__file__).resolve().parent.parent / "configs" / "tasks.yaml"
 METHODS = ("sft", "opd")
+BASELINE = "baseline"  # zero-shot student and teacher on the task's test set and its OOD sets
+
+
+def baseline_result_name(task: str, task_cfg: dict[str, Any], role: str, ood_repo: str | None = None) -> str:
+    """Result file for a zero-shot evaluation. The ChartQA files keep their notebook-era names."""
+    legacy = bool(task_cfg.get("legacy_prefix"))
+    stem = f"eval_{role}_zeroshot" if legacy else f"eval_zeroshot_{role}_{task}"
+    return f"{stem}.json" if ood_repo is None else f"{stem}_on_{ood_repo.split('/')[-1]}.json"
 
 
 def load_tasks(path: str | Path = TASKS_FILE) -> dict[str, Any]:
@@ -161,12 +169,11 @@ def run_point(task: str, method: str, budget: int, seed: int, tasks_file: str | 
     defaults, task_cfg = cfg["defaults"], cfg["tasks"][task]
     student = student or task_cfg.get("student", defaults["student"])
     teacher = teacher or task_cfg.get("teacher", defaults["teacher"])
-    names = point_names(task, task_cfg, defaults, method, budget, seed)
     result_repo = defaults["result_repo"]
     token = None if dry_run else get_hf_token()
     out_dir = Path("outputs")
     out_dir.mkdir(exist_ok=True)
-    plan: dict[str, Any] = {"names": names.__dict__, "commands": [], "skipped": []}
+    plan: dict[str, Any] = {"commands": [], "skipped": []}
 
     def maybe(name: str, cmd: list[str], log_tag: str) -> None:
         if not dry_run and result_on_hub(result_repo, name, token):
@@ -179,6 +186,19 @@ def run_point(task: str, method: str, budget: int, seed: int, tasks_file: str | 
         run(cmd, Path("logs") / f"{log_tag}.log")
         upload_small_file(out_dir / name, result_repo, token=token)
 
+    style = task_cfg.get("prompt_style", "chart")
+    if method == BASELINE:
+        # zero-shot student and teacher on the test set and every OOD set; no training, nothing to merge
+        for role, model in (("student", student), ("teacher", teacher)):
+            for ood_repo in [None] + ([] if skip_ood else list(task_cfg.get("ood_eval", []))):
+                name = baseline_result_name(task, task_cfg, role, ood_repo)
+                tag = name[len("eval_"):-len(".json")]
+                maybe(name, eval_command(model, ood_repo or task_cfg["data_repo"], out_dir / name, tag, seed,
+                                         defaults["eval"]["gpu_mem"], style), f"eval_{tag}")
+        return plan
+
+    names = point_names(task, task_cfg, defaults, method, budget, seed)
+    plan["names"] = names.__dict__
     model = eval_model(names, defaults)
     ood_sets = [] if skip_ood else list(task_cfg.get("ood_eval", []))
     id_done = not dry_run and result_on_hub(result_repo, names.result_name, token)
@@ -215,8 +235,8 @@ def run_point(task: str, method: str, budget: int, seed: int, tasks_file: str | 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run one (task, method, budget, seed) experiment point")
     parser.add_argument("--task", required=True)
-    parser.add_argument("--method", choices=METHODS, required=True)
-    parser.add_argument("--budget", type=int, required=True, help="Number of training questions")
+    parser.add_argument("--method", choices=(*METHODS, BASELINE), required=True)
+    parser.add_argument("--budget", type=int, default=0, help="Number of training questions (ignored for baseline)")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--student", default=None)
     parser.add_argument("--teacher", default=None)

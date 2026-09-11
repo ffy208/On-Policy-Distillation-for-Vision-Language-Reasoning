@@ -70,6 +70,19 @@ This writes `outputs/data_efficiency_chartqa_human.{json,md,png}` with per-seed 
 across-seed mean and standard deviation, a bootstrap interval pooled over questions of all seeds,
 and the OPD minus SFT paired bootstrap computed over the seeds both methods share.
 
+## Next batch (2026-09-11): OOD evaluation and the second task
+
+```bash
+slurm/sweep.sh chartqa_human "" "" baseline                     # zero-shot student + teacher on ChartQA, CharXiv, ChartQAPro
+slurm/sweep.sh geometry3k "" "" baseline                        # same on Geometry3K
+slurm/sweep.sh chartqa_human "100 300" "1 2 3 42" "sft opd"     # every finished point gets its two OOD evaluations
+slurm/sweep.sh chartqa_human "900 3000" "42" "sft opd"          # Colab-era points: re-merge (OPD) or retrain (SFT), then OOD
+slurm/sweep.sh geometry3k "100 300 900 2101" "42" "sft opd"     # second task, one seed first
+```
+
+Aggregate with `python -m vlm_opd.analysis.data_efficiency --task geometry3k --budgets 100 300 900 2101` and
+`python -m vlm_opd.analysis.ood --task chartqa_human`.
+
 ## Bad GPUs
 
 One L40S on `atl1-1-03-004-23-0` raised `cudaErrorECCUncorrectable` at device setup and killed four jobs
