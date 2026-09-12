@@ -19,7 +19,9 @@ default (`coc-gpu` here; the `ice-gpu` H100/H200 nodes are not open to this acco
 in `ReqNodeNotAvail`). `coc-gpu` offers 8 A100 and 32 L40S (48 GB). The default GRES is `gpu:l40s:1` (the larger pool);
 override with `--gres=gpu:a100:1` on the sbatch line or `GPU=a100 slurm/sweep.sh ...`. The `ice-bw-gpu`
 RTX PRO 6000 Blackwell nodes (97 GB per card) are also open to the account and are reached with
-`--gres=gpu:rtx_pro_6000_blackwell:1`; they fit a 32B teacher on one card. GRES type names are
+`--gres=gpu:rtx_pro_6000_blackwell:1`; they fit a 32B teacher on one card. Training runs there unchanged; vLLM
+evaluation needed `VLLM_WORKER_MULTIPROC_METHOD=spawn` (now set by `evaluate.py`), because its forked engine
+process died with "Cannot re-initialize CUDA in forked subprocess" on those nodes (12 jobs lost on 2026-09-11). GRES type names are
 lowercase and memory is requested per GPU (`--mem-per-gpu`), as PACE expects. Always `sbatch` from the repository root: the job uses `SLURM_SUBMIT_DIR` to find the code.
 Set `SCRATCH` and `HF_HOME` in `~/.bashrc` so models download to scratch, not to the home quota:
 

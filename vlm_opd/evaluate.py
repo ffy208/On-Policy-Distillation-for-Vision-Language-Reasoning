@@ -39,6 +39,12 @@ def build_vllm(
     max_lora_rank: int = 64,
 ):
     """Construct the vLLM engine. Image pixel bounds match the training side."""
+    import os
+
+    # vLLM forks its engine process by default and the fork fails when the parent has already touched CUDA
+    # ("Cannot re-initialize CUDA in forked subprocess"); this happened on every Blackwell node on PACE while
+    # the L40S nodes were fine. Spawning is always safe, so make it the default unless the caller chose.
+    os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
     from vllm import LLM
 
     return LLM(
