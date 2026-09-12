@@ -9,6 +9,8 @@ defaults:
   sft: {max_steps: 302, lr: 1.0e-4, batch: 4, grad_accum: 4, lora_r: 64}
   opd: {total_steps: 150, batch_size: 16, micro_batch: 4, lr: 5.0e-5, ckpt_every: 25, kl_direction: reverse}
   eval: {gpu_mem: 0.85}
+  # Generation budget for rollouts, teacher solutions, and evaluation. Tasks override it.
+  max_new_tokens: 512
   # Merged models (base + LoRA, ~4.3 GB each) stay on the local disk in `local` mode; only LoRA adapters and
   # results go to the Hub. `hub` pushes every merged model (the notebook-era behaviour), which exhausts the
   # 100 GB private-storage quota of a free Hub account after about twenty points.
@@ -35,4 +37,7 @@ tasks:
     data_repo: ffyang/vlm_opd_geometry3k
     sft_data_repo: ffyang/vlm_opd_sft_geometry3k
     prompt_style: geometry
+    # Geometry solutions run 3x longer than chart answers: at 512 new tokens 42% of zero-shot responses were cut
+    # off mid-reasoning (2026-09-11), so every command for this task gets a larger budget.
+    max_new_tokens: 1536
     ood_eval: []

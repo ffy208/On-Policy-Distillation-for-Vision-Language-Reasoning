@@ -16,6 +16,6 @@ if [[ " $METHODS " == *" baseline "* ]]; then
   METHODS="${METHODS//baseline/}"
 fi
 for b in $BUDGETS; do for s in $SEEDS; do for m in $METHODS; do
-  t=$([ "$m" = "opd" ] && echo "02:30:00" || echo "01:00:00")
+  t=$([ "$m" = "opd" ] && echo "${OPD_TIME:-02:30:00}" || echo "${SFT_TIME:-01:00:00}")   # OPD_TIME=04:00:00 for long-generation tasks
   sbatch $EXCLUDE -t "$t" --gres="gpu:${GPU}:1" -J "${m}_${TASK}_q${b}_s${s}" --export=ALL,TASK="$TASK",METHOD="$m",BUDGET="$b",SEED="$s" slurm/point.sbatch
 done; done; done

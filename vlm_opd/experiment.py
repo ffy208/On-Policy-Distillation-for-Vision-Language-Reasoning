@@ -124,14 +124,20 @@ def train_command(method: str, names: PointNames, task_cfg: dict[str, Any], defa
             "--total-steps", str(opd_steps or c["total_steps"]), "--batch-size", str(c["batch_size"]),
             "--micro-batch", str(c["micro_batch"]), "--lr", str(c["lr"]), "--ckpt-every", str(c["ckpt_every"]),
             "--kl-direction", c["kl_direction"], "--seed", str(seed),
+            "--max-new-tokens", str(generation_budget(task_cfg, defaults)),
             "--ckpt-repo", names.ckpt_repo or "", *publish]
 
 
 def eval_command(model_repo: str, data_repo: str, out_path: str | Path, tag: str, seed: int, gpu_mem: float,
-                 prompt_style: str = "chart") -> list[str]:
+                 prompt_style: str = "chart", max_new_tokens: int = 512) -> list[str]:
     return [sys.executable, "-m", "vlm_opd.evaluate", "--prompt-style", prompt_style, "--model", model_repo,
             "--data-repo", data_repo, "--split", "test", "--out", str(out_path), "--tag", tag, "--seed", str(seed),
-            "--gpu-mem", str(gpu_mem)]
+            "--gpu-mem", str(gpu_mem), "--max-new-tokens", str(max_new_tokens)]
+
+
+def generation_budget(task_cfg: dict[str, Any], defaults: dict[str, Any]) -> int:
+    """max_new_tokens for a task: the task's own value, else the default."""
+    return int(task_cfg.get("max_new_tokens", defaults.get("max_new_tokens", 512)))
 
 
 def result_on_hub(result_repo: str, name: str, token: str | None) -> bool:
@@ -187,6 +193,7 @@ def run_point(task: str, method: str, budget: int, seed: int, tasks_file: str | 
         upload_small_file(out_dir / name, result_repo, token=token)
 
     style = task_cfg.get("prompt_style", "chart")
+    budget_tokens = generation_budget(task_cfg, defaults)
     if method == BASELINE:
         # zero-shot student and teacher on the test set and every OOD set; no training, nothing to merge
         for role, model in (("student", student), ("teacher", teacher)):
@@ -194,7 +201,7 @@ def run_point(task: str, method: str, budget: int, seed: int, tasks_file: str | 
                 name = baseline_result_name(task, task_cfg, role, ood_repo)
                 tag = name[len("eval_"):-len(".json")]
                 maybe(name, eval_command(model, ood_repo or task_cfg["data_repo"], out_dir / name, tag, seed,
-                                         defaults["eval"]["gpu_mem"], style), f"eval_{tag}")
+                                         defaults["eval"]["gpu_mem"], style, budget_tokens), f"eval_{tag}")
         return plan
 
     names = point_names(task, task_cfg, defaults, method, budget, seed)
@@ -219,7 +226,7 @@ def run_point(task: str, method: str, budget: int, seed: int, tasks_file: str | 
             run(cmd_train, Path("logs") / f"train_{names.tag}.log")
     if dry_run or not id_done:
         maybe(names.result_name, eval_command(model, task_cfg["data_repo"], out_dir / names.result_name, names.tag, seed,
-                                              defaults["eval"]["gpu_mem"], task_cfg.get("prompt_style", "chart")),
+                                              defaults["eval"]["gpu_mem"], style, budget_tokens),
               f"eval_{names.tag}")
     else:
         plan["skipped"].append(names.result_name)
@@ -227,7 +234,7 @@ def run_point(task: str, method: str, budget: int, seed: int, tasks_file: str | 
     for ood_repo in ood_missing:
         name = names.ood_result_name(ood_repo)
         maybe(name, eval_command(model, ood_repo, out_dir / name, f"{names.tag}_on_{ood_repo.split('/')[-1]}",
-                                 seed, defaults["eval"]["gpu_mem"], task_cfg.get("prompt_style", "chart")),
+                                 seed, defaults["eval"]["gpu_mem"], style, budget_tokens),
               f"eval_{names.tag}_ood")
     return plan
 

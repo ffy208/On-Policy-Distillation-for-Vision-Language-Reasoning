@@ -58,6 +58,11 @@ Qwen3-VL-8B-Instruct. Task: ChartQA, human-written questions, 3000 train / 500 t
 - Accomplished a storage policy fix after a silent failure mode, as measured by 14 parallel jobs all dying at their first Hub push once private storage reached 99.5 GB of the 100 GB free quota (HTTP 400), then completing after the change, by keeping 4.3 GB merged models on the cluster disk, pushing only 0.3 GB LoRA adapters, pruning checkpoint repos to their latest step, and adding a storage report/reclaim script (99.5 GB to 59.7 GB).
 - Diagnosed one unrelated hardware failure: two jobs on the same node failed at device setup with `cudaErrorECCUncorrectable`; excluded the node via `SBATCH_EXCLUDE` and reported it.
 
+### Out-of-distribution evaluation and second task (2026-09-11, PACE)
+
+- Accomplished a controlled out-of-distribution test of the DAgger argument for on-policy distillation, as measured by scoring 16 ChartQA-trained models (SFT and OPD, 100 and 300 questions, 4 seeds each) plus both zero-shot models on CharXiv (461 numeric questions) and ChartQAPro (500 factoid questions) with the same prompt and scorer: both methods gain only 2 to 5 points over the zero-shot student (0.26 / 0.28) against a teacher at 0.41, OPD leads SFT by +3.0 [+1.0, +5.0] on CharXiv at 100 questions and is within noise elsewhere (+0.7, +0.5, -0.6), by adding OOD test-set adapters, a zero-shot baseline job, and a paired-by-seed OOD aggregation to the runner. Recorded as a negative result: the in-distribution lead does not transfer at this scale.
+- Caught a measurement bug before it reached the results: Geometry3K zero-shot responses were cut off at the 512-token cap in 42% of cases (median 1100 characters of reasoning, no `Answer:` line), so the 0.348 / 0.474 student / teacher numbers were invalid; fixed by a per-task generation budget (1536 tokens for geometry) applied to evaluation, rollouts, and teacher-solution generation, with the vLLM context grown to match.
+
 ## Metrics to capture in later stages
 
 Fill each of these with the exact number and the json file it comes from.

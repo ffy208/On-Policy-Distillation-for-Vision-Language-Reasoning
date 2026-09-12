@@ -100,3 +100,12 @@ def test_baseline_method_evaluates_both_models_on_every_set():
     assert models == {cfg["defaults"]["student"], cfg["defaults"]["teacher"]}
     plan = run_point("geometry3k", "baseline", 0, 42, dry_run=True, skip_ood=True)
     assert len(plan["commands"]) == 2 and plan["commands"][0][plan["commands"][0].index("--prompt-style") + 1] == "geometry"
+
+
+def test_generation_budget_reaches_every_command():
+    plan = run_point("geometry3k", "opd", 100, 7, dry_run=True, opd_steps=5)
+    for cmd in plan["commands"]:
+        assert cmd[cmd.index("--max-new-tokens") + 1] == "1536", cmd
+    plan = run_point("chartqa_human", "sft", 100, 7, dry_run=True, sft_steps=5, skip_ood=True)
+    ev = plan["commands"][-1]
+    assert ev[2] == "vlm_opd.evaluate" and ev[ev.index("--max-new-tokens") + 1] == "512"

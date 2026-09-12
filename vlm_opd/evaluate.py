@@ -167,14 +167,17 @@ def main() -> None:
     parser.add_argument("--out", type=str, required=True)
     parser.add_argument("--lora-path", type=str, default=None)
     parser.add_argument("--max-new-tokens", type=int, default=512)
+    # vLLM needs room for the image tokens, the prompt, and the whole generation; grow the context with the budget
     parser.add_argument("--temperature", type=float, default=0.0)
-    parser.add_argument("--max-model-len", type=int, default=4096)
+    parser.add_argument("--max-model-len", type=int, default=None, help="Default: 3584 + max_new_tokens")
     parser.add_argument("--gpu-mem", type=float, default=0.85)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--limit", type=int, default=None, help="Evaluate only the first N rows (smoke test)")
     parser.add_argument("--tag", type=str, default=None)
     parser.add_argument("--prompt-style", type=str, default=DEFAULT_PROMPT_STYLE, choices=PROMPT_STYLES)
     args = parser.parse_args()
+    if args.max_model_len is None:
+        args.max_model_len = 3584 + args.max_new_tokens
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     ds = load_hub_dataset(args.data_repo, args.split)

@@ -58,6 +58,42 @@ Intervals are bootstrap over questions pooled across seeds; the paired delta is 
 
 Update counts are fixed across budgets so data quantity is the only variable: SFT runs 302 optimizer steps everywhere (2 epochs at 3000), OPD runs 150 steps of batch 16 everywhere. Caveats: 900 and 3000 remain single-seed; the 3000-question OPD run covers each question less than once, so it is undertrained relative to SFT's 2 epochs. The 100- and 300-question points were run on Georgia Tech PACE (L40S, 13.5 s per OPD step); the others on Colab (A100).
 
+### Out-of-distribution chart benchmarks (2026-09-11, ChartQA-trained models, 4 seeds per point)
+
+The DAgger argument for OPD predicts that its advantage should grow under distribution shift. It does not here.
+Every ChartQA-trained model was scored, with the same prompt and scorer, on two held-out chart sets that differ
+in source and style from ChartQA:
+
+**CharXiv (461 numeric reasoning questions from arXiv figures)**
+
+| Model | Accuracy on the OOD set (95% CI, seeds, in-distribution accuracy) | OPD - SFT (paired) |
+|---|---|---|
+| student zero-shot | 0.258 [0.217, 0.299] | |
+| teacher zero-shot | 0.412 [0.369, 0.458] | |
+| SFT, 100 questions | 0.258 [0.239, 0.278] (n=4), ID 0.793 | |
+| OPD, 100 questions | 0.288 [0.267, 0.309] (n=4), ID 0.811 | +0.030 [+0.010, +0.050] over 4 seed(s) |
+| SFT, 300 questions | 0.278 [0.258, 0.298] (n=4), ID 0.799 | |
+| OPD, 300 questions | 0.285 [0.264, 0.305] (n=4), ID 0.826 | +0.007 [-0.012, +0.027] over 4 seed(s) |
+
+**ChartQAPro (500 factoid questions)**
+
+| Model | Accuracy on the OOD set (95% CI, seeds, in-distribution accuracy) | OPD - SFT (paired) |
+|---|---|---|
+| student zero-shot | 0.276 [0.238, 0.316] | |
+| teacher zero-shot | 0.406 [0.364, 0.448] | |
+| SFT, 100 questions | 0.301 [0.282, 0.322] (n=4), ID 0.793 | |
+| OPD, 100 questions | 0.306 [0.286, 0.328] (n=4), ID 0.811 | +0.005 [-0.011, +0.021] over 4 seed(s) |
+| SFT, 300 questions | 0.324 [0.303, 0.344] (n=4), ID 0.799 | |
+| OPD, 300 questions | 0.317 [0.297, 0.338] (n=4), ID 0.826 | -0.006 [-0.022, +0.009] over 4 seed(s) |
+
+
+Reading: both methods gain only 2 to 5 points over the zero-shot student off-distribution, against a teacher
+that is itself weak there (0.41). OPD leads SFT on CharXiv at 100 questions (+3.0, interval excludes zero) and
+is otherwise within noise; on ChartQAPro the two are indistinguishable. In-distribution gains of 13 to 16 points
+shrink to a few points off-distribution for both methods, so at this scale distillation on ChartQA teaches
+ChartQA, and the on-policy advantage is an in-distribution phenomenon. The 900- and 3000-question points are
+pending.
+
 ### Token-level teacher feedback (2026-09-09, 100 test questions, rollouts sampled at temperature 1.0)
 
 | Token class | Zero-shot student: tokens -> KL mass (concentration) | OPD-300 student: concentration |

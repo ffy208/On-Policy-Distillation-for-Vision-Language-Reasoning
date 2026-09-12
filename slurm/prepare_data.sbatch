@@ -55,8 +55,9 @@ case "$SOURCE" in
     DATA_REPO="${DATA_REPO:-$HUB_USER/vlm_opd_$SOURCE}"
     SFT_REPO="${SFT_REPO:-$HUB_USER/vlm_opd_sft_$SOURCE}"
     python -m vlm_opd.prepare --source "$SOURCE" --n-train "${N_TRAIN:-2101}" --n-test "${N_TEST:-500}" --repo-id "$DATA_REPO"
+    # 1536 new tokens: geometry solutions are long, and a truncated solution has no Answer: line and is dropped
     python -m vlm_opd.generate_teacher --model "$TEACHER" --prompt-style geometry --data-repo "$DATA_REPO" \
-      --out-repo "$SFT_REPO" --stats "outputs/teacher_generation_$SOURCE.json"
+      --max-new-tokens 1536 --max-model-len 6144 --out-repo "$SFT_REPO" --stats "outputs/teacher_generation_$SOURCE.json"
     ;;
   charxiv|chartqapro)
     DATA_REPO="${DATA_REPO:-$HUB_USER/vlm_opd_ood_$SOURCE}"
