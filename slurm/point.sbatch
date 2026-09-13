@@ -18,7 +18,7 @@ set -euo pipefail
 
 : "${TASK:?set TASK}"; : "${METHOD:?set METHOD}"; : "${BUDGET:?set BUDGET}"; : "${SEED:=42}"
 REPO_DIR="${REPO_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"   # submit from the repository root
-ENV_DIR="${ENV_DIR:-$HOME/vlm_opd_env}"
+ENV_DIR="${ENV_DIR:-${SCRATCH:-$HOME/scratch}/vlm_opd_env}"; [ -d "$ENV_DIR" ] || ENV_DIR="$HOME/vlm_opd_env"   # scratch first, older home venv as fallback
 export HF_HOME="${HF_HOME:-${SCRATCH:-$HOME/scratch}/hf_cache}"
 # Every compile/kernel cache goes to scratch: the home quota is small and vLLM's torch-compile cache filled it
 # (evaluation died with "Disk quota exceeded" in ~/.cache/vllm, 2026-09-13).

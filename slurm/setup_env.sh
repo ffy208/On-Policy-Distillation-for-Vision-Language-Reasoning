@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # One-time environment setup on PACE (run on a login node). Adjust the module names to what
-# `module avail` shows on your cluster. Installs into a uv virtualenv under $HOME.
+# `module avail` shows on your cluster. Installs into a uv virtualenv on scratch.
 set -euo pipefail
 
 REPO_DIR="${REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"   # the repo this script lives in
-ENV_DIR="${ENV_DIR:-$HOME/vlm_opd_env}"
-export HF_HOME="${HF_HOME:-${SCRATCH:-$HOME/scratch}/hf_cache}"   # models and datasets go to scratch, not home quota
+# Everything sizeable lives on scratch: the home quota (30 GB on ICE) cannot hold the venv, uv's cache (17 GB,
+# the venv hardlinks into it), the model cache, and vLLM's compile cache at the same time.
+SCRATCH="${SCRATCH:-$HOME/scratch}"
+ENV_DIR="${ENV_DIR:-$SCRATCH/vlm_opd_env}"
+export HF_HOME="${HF_HOME:-$SCRATCH/hf_cache}"
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$SCRATCH/uv_cache}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$SCRATCH/.cache}"
+mkdir -p "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
 
 module load python/3.12.5 2>/dev/null || module load python 2>/dev/null || true
 module load cuda/12.6.1 2>/dev/null || module load cuda 2>/dev/null || true

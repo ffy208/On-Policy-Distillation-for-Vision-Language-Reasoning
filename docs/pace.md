@@ -10,7 +10,7 @@ from its latest Hub checkpoint.
 ```bash
 git clone https://github.com/ffy208/On-Policy-Distillation-for-Vision-Language-Reasoning.git
 cd On-Policy-Distillation-for-Vision-Language-Reasoning
-bash slurm/setup_env.sh                 # uv venv + vllm/transformers/peft; HF_HOME on scratch (works from any clone location)
+bash slurm/setup_env.sh                 # uv venv, uv cache, HF_HOME, and compile caches all on scratch (works from any clone location)
 echo 'hf_...' > ~/.hf_token && chmod 600 ~/.hf_token
 ```
 
@@ -90,8 +90,10 @@ Aggregate with `python -m vlm_opd.analysis.data_efficiency --task geometry3k --b
 The home directory quota is small and holds the venv already. vLLM writes a torch-compile cache to
 `~/.cache/vllm` on the first run of each new configuration (a longer context is a new configuration); it filled
 the quota and every Geometry3K evaluation died with `Disk quota exceeded` (2026-09-13). The job scripts now
-point `XDG_CACHE_HOME`, `VLLM_CACHE_ROOT`, `TORCHINDUCTOR_CACHE_DIR`, and `TRITON_CACHE_DIR` at scratch. Clear
-the old cache once with `rm -rf ~/.cache/vllm ~/.cache/torch_extensions` and check with `pace-quota`.
+point `XDG_CACHE_HOME`, `VLLM_CACHE_ROOT`, `TORCHINDUCTOR_CACHE_DIR`, and `TRITON_CACHE_DIR` at scratch, and
+`setup_env.sh` builds the venv and uv's cache (17 GB; the venv hardlinks into it) on scratch too. To migrate an
+older home-based setup: `bash slurm/setup_env.sh` (rebuilds on scratch), then `rm -rf ~/vlm_opd_env ~/.cache/uv
+~/.cache/vllm`; check with `pace-quota`.
 
 ## Bad GPUs
 

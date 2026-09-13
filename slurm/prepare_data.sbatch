@@ -20,7 +20,7 @@ set -euo pipefail
 
 : "${SOURCE:?set SOURCE to geometry3k, charxiv or chartqapro}"
 REPO_DIR="${REPO_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"
-ENV_DIR="${ENV_DIR:-$HOME/vlm_opd_env}"
+ENV_DIR="${ENV_DIR:-${SCRATCH:-$HOME/scratch}/vlm_opd_env}"; [ -d "$ENV_DIR" ] || ENV_DIR="$HOME/vlm_opd_env"   # scratch first, older home venv as fallback
 HUB_USER="${HUB_USER:-ffyang}"
 TEACHER="${TEACHER:-Qwen/Qwen3-VL-8B-Instruct}"
 export HF_HOME="${HF_HOME:-${SCRATCH:-$HOME/scratch}/hf_cache}"
