@@ -85,6 +85,14 @@ slurm/sweep.sh geometry3k "100 300 900 2101" "42" "sft opd"     # second task, o
 Aggregate with `python -m vlm_opd.analysis.data_efficiency --task geometry3k --budgets 100 300 900 2101` and
 `python -m vlm_opd.analysis.ood --task chartqa_human`.
 
+## Home quota
+
+The home directory quota is small and holds the venv already. vLLM writes a torch-compile cache to
+`~/.cache/vllm` on the first run of each new configuration (a longer context is a new configuration); it filled
+the quota and every Geometry3K evaluation died with `Disk quota exceeded` (2026-09-13). The job scripts now
+point `XDG_CACHE_HOME`, `VLLM_CACHE_ROOT`, `TORCHINDUCTOR_CACHE_DIR`, and `TRITON_CACHE_DIR` at scratch. Clear
+the old cache once with `rm -rf ~/.cache/vllm ~/.cache/torch_extensions` and check with `pace-quota`.
+
 ## Bad GPUs
 
 One L40S on `atl1-1-03-004-23-0` raised `cudaErrorECCUncorrectable` at device setup and killed four jobs

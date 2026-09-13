@@ -20,6 +20,13 @@ set -euo pipefail
 REPO_DIR="${REPO_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"   # submit from the repository root
 ENV_DIR="${ENV_DIR:-$HOME/vlm_opd_env}"
 export HF_HOME="${HF_HOME:-${SCRATCH:-$HOME/scratch}/hf_cache}"
+# Every compile/kernel cache goes to scratch: the home quota is small and vLLM's torch-compile cache filled it
+# (evaluation died with "Disk quota exceeded" in ~/.cache/vllm, 2026-09-13).
+export XDG_CACHE_HOME="${SCRATCH:-$HOME/scratch}/.cache"
+export VLLM_CACHE_ROOT="$XDG_CACHE_HOME/vllm"
+export TORCHINDUCTOR_CACHE_DIR="$XDG_CACHE_HOME/torchinductor"
+export TRITON_CACHE_DIR="$XDG_CACHE_HOME/triton"
+mkdir -p "$VLLM_CACHE_ROOT" "$TORCHINDUCTOR_CACHE_DIR" "$TRITON_CACHE_DIR"
 export HF_TOKEN="$(cat "$HOME/.hf_token")"
 export TOKENIZERS_PARALLELISM=false
 

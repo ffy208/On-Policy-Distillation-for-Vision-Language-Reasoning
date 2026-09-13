@@ -16,6 +16,8 @@ if [[ " $METHODS " == *" baseline "* ]]; then
   METHODS="${METHODS//baseline/}"
 fi
 for b in $BUDGETS; do for s in $SEEDS; do for m in $METHODS; do
-  t=$([ "$m" = "opd" ] && echo "${OPD_TIME:-02:30:00}" || echo "${SFT_TIME:-01:00:00}")   # OPD_TIME=04:00:00 for long-generation tasks
+  # OPD walltime: geometry rollouts are 1536 tokens and a point takes ~3 h 40 min; chart points take ~1 h.
+  default_opd=$([ "$TASK" = "geometry3k" ] && echo "05:00:00" || echo "02:30:00")
+  t=$([ "$m" = "opd" ] && echo "${OPD_TIME:-$default_opd}" || echo "${SFT_TIME:-01:00:00}")
   sbatch $EXCLUDE -t "$t" --gres="gpu:${GPU}:1" -J "${m}_${TASK}_q${b}_s${s}" --export=ALL,TASK="$TASK",METHOD="$m",BUDGET="$b",SEED="$s" slurm/point.sbatch
 done; done; done
