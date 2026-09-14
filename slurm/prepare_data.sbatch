@@ -4,6 +4,7 @@
 #   sbatch --export=ALL,SOURCE=geometry3k slurm/prepare_data.sbatch      # task: train + test + teacher SFT data
 #   sbatch --export=ALL,SOURCE=charxiv    slurm/prepare_data.sbatch      # OOD test set only
 #   sbatch --export=ALL,SOURCE=chartqapro slurm/prepare_data.sbatch
+#   sbatch --export=ALL,SOURCE=geometry3k_unfiltered slurm/prepare_data.sbatch   # SFT control: unfiltered teacher samples
 # Repo names follow configs/tasks.yaml: ffyang/vlm_opd_<source> and ffyang/vlm_opd_sft_<source> for
 # tasks, ffyang/vlm_opd_ood_<source> for OOD sets. Override with DATA_REPO / SFT_REPO.
 #SBATCH -J vlmopd-data
@@ -64,6 +65,13 @@ case "$SOURCE" in
     python -m vlm_opd.prepare --source "$SOURCE" --n-train "${N_TRAIN:-2101}" --n-test "${N_TEST:-500}" --repo-id "$DATA_REPO"
     # 1536 new tokens: geometry solutions are long, and a truncated solution has no Answer: line and is dropped
     python -m vlm_opd.generate_teacher --model "$TEACHER" --prompt-style geometry --data-repo "$DATA_REPO" \
+      --max-new-tokens 1536 --max-model-len 6144 --out-repo "$SFT_REPO" --stats "outputs/teacher_generation_$SOURCE.json"
+    ;;
+  geometry3k_unfiltered)
+    # control: every question's first teacher sample, no correctness filter (the dataset itself already exists)
+    DATA_REPO="${DATA_REPO:-$HUB_USER/vlm_opd_geometry3k}"
+    SFT_REPO="${SFT_REPO:-$HUB_USER/vlm_opd_sft_geometry3k_unfiltered}"
+    python -m vlm_opd.generate_teacher --model "$TEACHER" --prompt-style geometry --data-repo "$DATA_REPO" --keep-all \
       --max-new-tokens 1536 --max-model-len 6144 --out-repo "$SFT_REPO" --stats "outputs/teacher_generation_$SOURCE.json"
     ;;
   charxiv|chartqapro)

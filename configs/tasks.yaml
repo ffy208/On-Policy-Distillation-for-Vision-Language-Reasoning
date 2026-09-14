@@ -41,3 +41,13 @@ tasks:
     # off mid-reasoning (2026-09-11), so every command for this task gets a larger budget.
     max_new_tokens: 1536
     ood_eval: []
+
+  geometry3k_unfiltered:
+    # Control for the rejection-sampling filter (SFT only; its OPD points would duplicate geometry3k). Same
+    # questions, but the SFT data keeps the teacher's first sample for every question, correct or not:
+    #   sbatch --export=ALL,SOURCE=geometry3k_unfiltered slurm/prepare_data.sbatch
+    data_repo: ffyang/vlm_opd_geometry3k
+    sft_data_repo: ffyang/vlm_opd_sft_geometry3k_unfiltered
+    prompt_style: geometry
+    max_new_tokens: 1536
+    ood_eval: []

@@ -68,8 +68,14 @@ def generate_dataset(
     max_model_len: int = 4096,
     gpu_memory_utilization: float = 0.9,
     prompt_style: str = DEFAULT_PROMPT_STYLE,
+    keep_all: bool = False,
 ):
-    """Sample teacher solutions and return (filtered dataset, stats dict)."""
+    """Sample teacher solutions and return (filtered dataset, stats dict).
+
+    With `keep_all`, the first sample of every question is kept whether or not it is correct or even finishes
+    with an `Answer:` line. This is the control for the rejection-sampling filter: SFT on this data sees the
+    teacher's raw output distribution, the same one OPD matches on-policy.
+    """
     from transformers import AutoProcessor
 
     token = get_hf_token()
@@ -83,8 +89,12 @@ def generate_dataset(
 
     responses: list[str | None] = []
     attempts: list[int] = []
+    n_correct_first = 0
     for cands, ex in zip(samples, dataset):
         resp, n = pick_correct(cands, ex["answer"])
+        n_correct_first += int(bool(cands) and relaxed_accuracy(parse_answer(cands[0]), ex["answer"]))
+        if keep_all:
+            resp, n = (cands[0] if cands else None), 1
         responses.append(resp)
         attempts.append(n)
 
@@ -96,6 +106,8 @@ def generate_dataset(
         "n_questions": len(dataset),
         "n_kept": len(kept),
         "acceptance_rate": len(kept) / max(1, len(dataset)),
+        "keep_all": keep_all,
+        "first_sample_accuracy": n_correct_first / max(1, len(dataset)),
         "num_samples": num_samples,
         "temperature": temperature,
         "max_new_tokens": max_new_tokens,
@@ -124,6 +136,8 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--limit", type=int, default=None, help="Only the first N questions (smoke test)")
     parser.add_argument("--prompt-style", type=str, default=DEFAULT_PROMPT_STYLE, choices=PROMPT_STYLES)
+    parser.add_argument("--keep-all", action="store_true",
+                        help="Keep the first sample of every question, correct or not (control for the correctness filter)")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -132,7 +146,7 @@ def main() -> None:
         ds = ds.select(range(min(args.limit, len(ds))))
     kept, stats = generate_dataset(
         args.model, ds, args.num_samples, args.temperature, args.max_new_tokens, args.seed,
-        args.max_model_len, args.gpu_mem, prompt_style=args.prompt_style,
+        args.max_model_len, args.gpu_mem, prompt_style=args.prompt_style, keep_all=args.keep_all,
     )
     if args.stats:
         Path(args.stats).parent.mkdir(parents=True, exist_ok=True)
