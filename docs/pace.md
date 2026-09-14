@@ -20,8 +20,11 @@ in `ReqNodeNotAvail`). `coc-gpu` offers 8 A100 and 32 L40S (48 GB). The default 
 override with `--gres=gpu:a100:1` on the sbatch line or `GPU=a100 slurm/sweep.sh ...`. The `ice-bw-gpu`
 RTX PRO 6000 Blackwell nodes (97 GB per card) are also open to the account and are reached with
 `--gres=gpu:rtx_pro_6000_blackwell:1`; they fit a 32B teacher on one card. Training runs there unchanged; vLLM
-evaluation needed `VLLM_WORKER_MULTIPROC_METHOD=spawn` (now set by `evaluate.py`), because its forked engine
-process died with "Cannot re-initialize CUDA in forked subprocess" on those nodes (12 jobs lost on 2026-09-11). GRES type names are
+evaluation does not work there yet: first the forked engine process died with "Cannot re-initialize CUDA in
+forked subprocess" (fixed by `VLLM_WORKER_MULTIPROC_METHOD=spawn`, now set in `evaluate.py`), then FlashInfer, vLLM's
+default attention backend on Blackwell, refused the architecture ("requires GPUs with sm75 or higher"; the
+installed build does not know sm_120). Rule until that is resolved: train on Blackwell when the rollouts are
+long, evaluate on L40S. A resubmitted point only evaluates, so moving it costs nothing. GRES type names are
 lowercase and memory is requested per GPU (`--mem-per-gpu`), as PACE expects. Always `sbatch` from the repository root: the job uses `SLURM_SUBMIT_DIR` to find the code.
 Set `SCRATCH` and `HF_HOME` in `~/.bashrc` so models download to scratch, not to the home quota:
 
