@@ -353,7 +353,7 @@ def train(cfg: OPDConfig) -> dict[str, Any]:
     processor.save_pretrained(str(adapter_dir))
     merged_dir: Path | None = None
     if cfg.merge or cfg.merged_repo:
-        del teacher  # noqa: F821 - None when the run only merged
+        del teacher  # None when the run only merged
         torch.cuda.empty_cache() if torch.cuda.is_available() else None
         from .sft import merge_and_save, push_dir
 
