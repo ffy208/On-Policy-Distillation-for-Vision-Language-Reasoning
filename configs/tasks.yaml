@@ -14,7 +14,7 @@ defaults:
   # Merged models (base + LoRA, ~4.3 GB each) stay on the local disk in `local` mode; only LoRA adapters and
   # results go to the Hub. `hub` pushes every merged model (the notebook-era behaviour), which exhausts the
   # 100 GB private-storage quota of a free Hub account after about twenty points.
-  artifacts: {merged: local}
+  artifacts: {merged: local, keep_merged: false}   # keep_merged: true leaves ckpt/<point>/merged on disk after evaluation
   # OPD variants: `--method opd-<name>` runs the OPD trainer with these extra arguments and names every
   # artifact `opd-<name>_...`, so a variant is a separate column in the aggregation tables.
   opd_variants:

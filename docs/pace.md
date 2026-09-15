@@ -111,6 +111,15 @@ slurm/sweep.sh geometry3k "100 300 900 2101" "42" "sft opd"     # second task, o
 Aggregate with `python -m vlm_opd.analysis.data_efficiency --task geometry3k --budgets 100 300 900 2101` and
 `python -m vlm_opd.analysis.ood --task chartqa_human`.
 
+## Scratch quota
+
+Scratch is 300 GB. Each point writes a 4.3 GB merged model, the 32B teacher download is 64 GB, and forty
+concurrent points filled the disk on 2026-09-15: OPD runs died at their first or second checkpoint, SFT runs at
+evaluation, and the batch had to be resubmitted. The runner now deletes a point's merged model once every
+evaluation of that point is on the Hub (`artifacts.keep_merged: false`); OPD regenerates it from the Hub
+checkpoint in minutes and SFT retrains in 15 minutes if an evaluation is ever added. Check with `pace-quota`
+and clear leftovers of finished points with `rm -rf ckpt/*/merged`.
+
 ## Home quota
 
 The home directory quota is small and holds the venv already. vLLM writes a torch-compile cache to

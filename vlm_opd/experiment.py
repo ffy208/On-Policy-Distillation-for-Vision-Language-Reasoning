@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -263,6 +264,16 @@ def run_point(task: str, method: str, budget: int, seed: int, tasks_file: str | 
         maybe(name, eval_command(model, ood_repo, out_dir / name, f"{names.tag}_on_{ood_repo.split('/')[-1]}",
                                  seed, defaults["eval"]["gpu_mem"], style, budget_tokens),
               f"eval_{names.tag}_ood")
+
+    # Every evaluation of this point is on the Hub now. The merged model (4.3 GB) is regenerable (OPD from its Hub
+    # checkpoint, SFT by retraining), so free the scratch disk unless the config says to keep it: 40 concurrent
+    # points plus a 32B teacher download filled the 300 GB scratch quota and killed a whole batch (2026-09-15).
+    if not dry_run and not defaults.get("artifacts", {}).get("keep_merged", False):
+        merged = Path(names.merged_dir)
+        if merged.exists():
+            shutil.rmtree(merged, ignore_errors=True)
+            logger.info("removed %s (regenerable; keep it with artifacts.keep_merged: true)", merged)
+            plan["cleaned"] = str(merged)
     return plan
 
 
