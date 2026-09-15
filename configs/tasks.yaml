@@ -47,6 +47,27 @@ tasks:
     max_new_tokens: 1536
     ood_eval: []
 
+  # ---- scale axis (same ChartQA data and teacher solutions; only the student or the teacher changes) ----
+  chartqa_human_s4b:
+    # 4B student, 8B teacher. Same SFT data (teacher solutions do not depend on the student).
+    data_repo: ffyang/vlm_opd_chartqa_human
+    sft_data_repo: ffyang/vlm_opd_sft_human
+    student: Qwen/Qwen3-VL-4B-Instruct
+    prompt_style: chart
+    ood_eval: []
+
+  chartqa_human_t32b:
+    # 2B student, 32B teacher. Train on a Blackwell card (teacher 64 GB in bf16 + student + activations);
+    # the teacher's zero-shot evaluation needs two 48 GB cards (vLLM tensor parallel), see teacher_eval_tp.
+    # SFT is not defined for this task: its teacher solutions would need a 32B generation pass; the axis is OPD-only.
+    data_repo: ffyang/vlm_opd_chartqa_human
+    sft_data_repo: ffyang/vlm_opd_sft_human
+    teacher: Qwen/Qwen3-VL-32B-Instruct
+    teacher_eval_tp: 2
+    opd: {micro_batch: 2}   # 32B teacher logits in fp32 chunks: halve the micro-batch to stay under 97 GB
+    prompt_style: chart
+    ood_eval: []
+
   geometry3k_unfiltered:
     # Control for the rejection-sampling filter (SFT only; its OPD points would duplicate geometry3k). Same
     # questions, but the SFT data keeps the teacher's first sample for every question, correct or not:

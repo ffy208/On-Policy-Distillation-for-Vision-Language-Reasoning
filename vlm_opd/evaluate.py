@@ -37,8 +37,12 @@ def build_vllm(
     seed: int = DEFAULT_SEED,
     enable_lora: bool = False,
     max_lora_rank: int = 64,
+    tensor_parallel_size: int = 1,
 ):
-    """Construct the vLLM engine. Image pixel bounds match the training side."""
+    """Construct the vLLM engine. Image pixel bounds match the training side.
+
+    `tensor_parallel_size` > 1 shards the model over that many GPUs (a 32B teacher needs two 48 GB cards).
+    """
     import os
 
     # vLLM forks its engine process by default and the fork fails when the parent has already touched CUDA
@@ -54,6 +58,7 @@ def build_vllm(
         limit_mm_per_prompt={"image": 1},
         mm_processor_kwargs=image_pixel_bounds(),
         seed=seed,
+        tensor_parallel_size=tensor_parallel_size,
         enable_lora=enable_lora,
         max_lora_rank=max_lora_rank if enable_lora else 16,
         trust_remote_code=True,
@@ -105,6 +110,7 @@ def run_eval(
     tag: str | None = None,
     llm=None,
     prompt_style: str = DEFAULT_PROMPT_STYLE,
+    tensor_parallel_size: int = 1,
 ) -> dict[str, Any]:
     """Full evaluation pipeline: build engine -> build inputs -> generate -> score -> write json.
 
@@ -125,7 +131,8 @@ def run_eval(
     processor = AutoProcessor.from_pretrained(model_id, token=token, **image_pixel_bounds())
     if llm is None:
         llm = build_vllm(
-            model_id, max_model_len, gpu_memory_utilization, seed, enable_lora=lora_path is not None
+            model_id, max_model_len, gpu_memory_utilization, seed, enable_lora=lora_path is not None,
+            tensor_parallel_size=tensor_parallel_size,
         )
 
     inputs = build_inputs(processor, dataset, prompt_style)
@@ -181,6 +188,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None, help="Evaluate only the first N rows (smoke test)")
     parser.add_argument("--tag", type=str, default=None)
     parser.add_argument("--prompt-style", type=str, default=DEFAULT_PROMPT_STYLE, choices=PROMPT_STYLES)
+    parser.add_argument("--tp", type=int, default=1, help="Tensor-parallel GPUs (2 for a 32B model on 48 GB cards)")
     args = parser.parse_args()
     if args.max_model_len is None:
         args.max_model_len = 3584 + args.max_new_tokens
@@ -192,6 +200,7 @@ def main() -> None:
     run_eval(
         args.model, ds, args.out, args.lora_path, args.max_new_tokens, args.temperature,
         args.max_model_len, args.gpu_mem, args.seed, args.tag, prompt_style=args.prompt_style,
+        tensor_parallel_size=args.tp,
     )
 
 

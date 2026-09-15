@@ -75,6 +75,19 @@ This writes `outputs/data_efficiency_chartqa_human.{json,md,png}` with per-seed 
 across-seed mean and standard deviation, a bootstrap interval pooled over questions of all seeds,
 and the OPD minus SFT paired bootstrap computed over the seeds both methods share.
 
+## Scale axis (2026-09-14): 4B student and 32B teacher on ChartQA
+
+```bash
+slurm/sweep.sh chartqa_human_s4b "" "" baseline                                   # 4B zero-shot (+ 8B teacher again)
+slurm/sweep.sh chartqa_human_s4b "100 300" "42 1" "sft opd"                       # 8 jobs on L40S
+GPUS=2 slurm/sweep.sh chartqa_human_t32b "" "" baseline                           # 32B teacher zero-shot, tensor parallel over 2 L40S
+GPU=rtx_pro_6000_blackwell slurm/sweep.sh chartqa_human_t32b "300" "42 1 2" "opd" # train on 97 GB cards
+slurm/sweep.sh chartqa_human_t32b "300" "42 1 2" "opd"                            # afterwards: merge + evaluate on L40S
+```
+
+The 32B-teacher points die at evaluation on Blackwell (vLLM, see below); resubmitting them on L40S resumes at the
+final checkpoint, skips the teacher entirely, merges, and evaluates.
+
 ## Next batch (2026-09-14): OPD variants on Geometry3K
 
 ```bash

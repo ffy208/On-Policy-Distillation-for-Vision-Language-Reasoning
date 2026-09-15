@@ -136,13 +136,13 @@ def train_command(method: str, names: PointNames, task_cfg: dict[str, Any], defa
     local = merged_mode(defaults) == "local"
     method, extra = split_method(method, defaults)
     if method == "sft":
-        c = defaults["sft"]
+        c = {**defaults["sft"], **task_cfg.get("sft", {})}
         publish = ["--merge", "--push-adapter-repo", names.adapter_repo] if local else ["--push-merged-repo", names.merged_repo]
         return [py, "-m", "vlm_opd.sft", *style, "--data-repo", task_cfg["sft_data_repo"], "--out-dir", names.out_dir,
                 "--model", student, "--max-question-index", str(budget), "--max-steps", str(sft_steps or c["max_steps"]),
                 "--lr", str(c["lr"]), "--batch", str(c["batch"]), "--grad-accum", str(c["grad_accum"]),
                 "--lora-r", str(c["lora_r"]), "--seed", str(seed), *publish]
-    c = defaults["opd"]
+    c = {**defaults["opd"], **task_cfg.get("opd", {})}  # per-task overrides, e.g. a smaller micro-batch for a 32B teacher
     publish = [] if local else ["--merged-repo", names.merged_repo]
     return [py, "-m", "vlm_opd.opd_trainer", *style, "--data-repo", task_cfg["data_repo"], "--out-dir", names.out_dir,
             "--student", student, "--teacher", teacher, "--limit", str(budget),
@@ -154,10 +154,11 @@ def train_command(method: str, names: PointNames, task_cfg: dict[str, Any], defa
 
 
 def eval_command(model_repo: str, data_repo: str, out_path: str | Path, tag: str, seed: int, gpu_mem: float,
-                 prompt_style: str = "chart", max_new_tokens: int = 512) -> list[str]:
-    return [sys.executable, "-m", "vlm_opd.evaluate", "--prompt-style", prompt_style, "--model", model_repo,
-            "--data-repo", data_repo, "--split", "test", "--out", str(out_path), "--tag", tag, "--seed", str(seed),
-            "--gpu-mem", str(gpu_mem), "--max-new-tokens", str(max_new_tokens)]
+                 prompt_style: str = "chart", max_new_tokens: int = 512, tp: int = 1) -> list[str]:
+    cmd = [sys.executable, "-m", "vlm_opd.evaluate", "--prompt-style", prompt_style, "--model", model_repo,
+           "--data-repo", data_repo, "--split", "test", "--out", str(out_path), "--tag", tag, "--seed", str(seed),
+           "--gpu-mem", str(gpu_mem), "--max-new-tokens", str(max_new_tokens)]
+    return cmd + (["--tp", str(tp)] if tp > 1 else [])
 
 
 def generation_budget(task_cfg: dict[str, Any], defaults: dict[str, Any]) -> int:
@@ -222,11 +223,12 @@ def run_point(task: str, method: str, budget: int, seed: int, tasks_file: str | 
     if method == BASELINE:
         # zero-shot student and teacher on the test set and every OOD set; no training, nothing to merge
         for role, model in (("student", student), ("teacher", teacher)):
+            tp = int(task_cfg.get("teacher_eval_tp", 1)) if role == "teacher" else 1  # a 32B teacher needs 2 GPUs
             for ood_repo in [None] + ([] if skip_ood else list(task_cfg.get("ood_eval", []))):
                 name = baseline_result_name(task, task_cfg, role, ood_repo)
                 tag = name[len("eval_"):-len(".json")]
                 maybe(name, eval_command(model, ood_repo or task_cfg["data_repo"], out_dir / name, tag, seed,
-                                         defaults["eval"]["gpu_mem"], style, budget_tokens), f"eval_{tag}")
+                                         defaults["eval"]["gpu_mem"], style, budget_tokens, tp), f"eval_{tag}")
         return plan
 
     names = point_names(task, task_cfg, defaults, method, budget, seed)

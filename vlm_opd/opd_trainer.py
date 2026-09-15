@@ -290,7 +290,12 @@ def train(cfg: OPDConfig) -> dict[str, Any]:
         if found:
             start_step, resume_dir = found
 
-    teacher = load_teacher(cfg.teacher_model, token)
+    # A run that resumes at its final step only needs to merge; skip the teacher (a 32B teacher does not fit
+    # on the 48 GB cards that run the evaluation, so the merge-and-evaluate resubmission must not load it).
+    training_left = start_step < cfg.total_steps
+    teacher = load_teacher(cfg.teacher_model, token) if training_left else None
+    if not training_left:
+        logger.info("Resumed at final step %d: skipping teacher load, merging only", start_step)
     student = build_student(cfg.student_model, cfg.lora_r, resume_dir, token)
     summary = trainable_summary(student)
     if summary["vision_trainable"]:
@@ -348,7 +353,7 @@ def train(cfg: OPDConfig) -> dict[str, Any]:
     processor.save_pretrained(str(adapter_dir))
     merged_dir: Path | None = None
     if cfg.merge or cfg.merged_repo:
-        del teacher
+        del teacher  # noqa: F821 - None when the run only merged
         torch.cuda.empty_cache() if torch.cuda.is_available() else None
         from .sft import merge_and_save, push_dir
 

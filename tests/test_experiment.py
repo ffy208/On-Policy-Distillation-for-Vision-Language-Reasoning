@@ -129,3 +129,20 @@ def test_opd_variants_are_named_and_passed_to_the_trainer():
     # seed-42 ChartQA legacy names never apply to a variant
     c = cfg["tasks"]["chartqa_human"]
     assert point_names("chartqa_human", c, d, "opd-term", 300, 42).result_name == "eval_opd-term_chartqa_human_q300_s42.json"
+
+
+def test_scale_axis_tasks_change_only_the_model_and_teacher_eval_gets_tp():
+    cfg = load_tasks(TASKS_FILE)
+    d = cfg["defaults"]
+    plan = run_point("chartqa_human_s4b", "opd", 100, 7, dry_run=True, opd_steps=5)
+    train = plan["commands"][0]
+    assert train[train.index("--student") + 1] == "Qwen/Qwen3-VL-4B-Instruct" and train[train.index("--teacher") + 1] == d["teacher"]
+    assert plan["names"]["result_name"] == "eval_opd_chartqa_human_s4b_q100_s7.json"
+    plan = run_point("chartqa_human_t32b", "opd", 300, 1, dry_run=True, opd_steps=5)
+    train = plan["commands"][0]
+    assert train[train.index("--micro-batch") + 1] == "2" and train[train.index("--batch-size") + 1] == "16"
+    plan = run_point("chartqa_human_t32b", "baseline", 0, 42, dry_run=True)
+    teacher_cmds = [c for c in plan["commands"] if c[c.index("--model") + 1] == "Qwen/Qwen3-VL-32B-Instruct"]
+    student_cmds = [c for c in plan["commands"] if c[c.index("--model") + 1] == d["student"]]
+    assert teacher_cmds and all(c[c.index("--tp") + 1] == "2" for c in teacher_cmds)
+    assert student_cmds and all("--tp" not in c for c in student_cmds)

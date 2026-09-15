@@ -7,17 +7,18 @@ BUDGETS="${2:-100 300 900 3000}"
 SEEDS="${3:-42}"
 METHODS="${4:-sft opd}"
 GPU="${GPU:-l40s}"     # GPU=a100 slurm/sweep.sh ... to use the (smaller) A100 pool instead
+GPUS="${GPUS:-1}"      # GPUS=2 for jobs that shard a 32B model over two cards (tensor parallel)
 # Nodes whose GPU failed the health check in an earlier job (written by point.sbatch) are excluded up front.
 EXCLUDE=""; [ -s logs/bad_nodes.txt ] && EXCLUDE="--exclude=$(paste -sd, logs/bad_nodes.txt)"
 # "baseline" (zero-shot student + teacher on the test set and OOD sets) is one job per task, budgets/seeds ignored:
 #   slurm/sweep.sh geometry3k "" "" baseline
 if [[ " $METHODS " == *" baseline "* ]]; then
-  sbatch $EXCLUDE -t "00:45:00" --gres="gpu:${GPU}:1" -J "baseline_${TASK}" --export=ALL,TASK="$TASK",METHOD=baseline,BUDGET=0,SEED=42 slurm/point.sbatch
+  sbatch $EXCLUDE -t "00:45:00" --gres="gpu:${GPU}:${GPUS}" -J "baseline_${TASK}" --export=ALL,TASK="$TASK",METHOD=baseline,BUDGET=0,SEED=42 slurm/point.sbatch
   METHODS="${METHODS//baseline/}"
 fi
 for b in $BUDGETS; do for s in $SEEDS; do for m in $METHODS; do
   # OPD walltime: geometry rollouts are 1536 tokens and a point takes ~3 h 40 min; chart points take ~1 h.
   default_opd=$([ "$TASK" = "geometry3k" ] && echo "05:00:00" || echo "02:30:00")
   t=$([ "$m" = "opd" ] && echo "${OPD_TIME:-$default_opd}" || echo "${SFT_TIME:-01:00:00}")
-  sbatch $EXCLUDE -t "$t" --gres="gpu:${GPU}:1" -J "${m}_${TASK}_q${b}_s${s}" --export=ALL,TASK="$TASK",METHOD="$m",BUDGET="$b",SEED="$s" slurm/point.sbatch
+  sbatch $EXCLUDE -t "$t" --gres="gpu:${GPU}:${GPUS}" -J "${m}_${TASK}_q${b}_s${s}" --export=ALL,TASK="$TASK",METHOD="$m",BUDGET="$b",SEED="$s" slurm/point.sbatch
 done; done; done
