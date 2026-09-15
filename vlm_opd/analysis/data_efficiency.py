@@ -74,8 +74,10 @@ def plot(table: dict[str, Any], out_png: str | Path) -> Path:
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(6, 4))
-    for method, label in (("sft", "SFT (supervised distillation)"), ("opd", "OPD (on-policy distillation)")):
-        pts = [(p["budget"], p[method]) for p in table["points"] if p[method]]
+    labels = {"sft": "SFT (supervised distillation)", "opd": "OPD (on-policy distillation)"}
+    for method in table.get("methods", list(METHODS)):
+        label = labels.get(method, method.upper())
+        pts = [(p["budget"], p[method]) for p in table["points"] if p.get(method)]
         if not pts:
             continue
         xs = [b for b, _ in pts]
@@ -127,7 +129,7 @@ import numpy as np
 
 from .stats import bootstrap_ci, load_correctness, paired_bootstrap
 
-_SEEDED = re.compile(r"^eval_(?P<method>sft|opd)_(?P<task>.+)_q(?P<budget>\d+)_s(?P<seed>\d+)\.json$")
+_SEEDED = re.compile(r"^eval_(?P<method>sft|opd(?:-[a-z0-9]+)?)_(?P<task>.+)_q(?P<budget>\d+)_s(?P<seed>\d+)\.json$")
 _LEGACY = re.compile(r"^eval_(?P<method>sft|opd)_q(?P<budget>\d+)\.json$")
 
 
@@ -180,19 +182,24 @@ def _paired_over_seeds(a: dict[int, Path], b: dict[int, Path], n_boot: int) -> d
 
 def collect_seeded(out_dir: str | Path, task: str, budgets: list[int], baseline_json: str | Path | None = None,
                    teacher_json: str | Path | None = None, n_boot: int = 10000,
-                   exclude_seeds: tuple[int, ...] = SMOKE_SEEDS) -> dict[str, Any]:
-    """Same shape as `collect` (so `markdown_table`, `plot`, `crossover` work) but aggregated over every seed found."""
+                   exclude_seeds: tuple[int, ...] = SMOKE_SEEDS, methods: tuple[str, ...] = METHODS) -> dict[str, Any]:
+    """Same shape as `collect` (so `markdown_table`, `plot`, `crossover` work) but aggregated over every seed found.
+
+    `methods` may include OPD variants such as `opd-term`; every non-SFT method gets a paired delta against SFT
+    in `row["deltas"]` (and `row["opd_minus_sft"]` is kept for the plain OPD column).
+    """
     runs = find_runs(out_dir, task, exclude_seeds=exclude_seeds)
     points: list[dict[str, Any]] = []
     for budget in budgets:
-        row: dict[str, Any] = {"budget": budget}
-        for method in METHODS:
+        row: dict[str, Any] = {"budget": budget, "deltas": {}}
+        for method in methods:
             files = runs.get((method, budget))
             row[method] = _pooled(files, n_boot) if files else None
-        if runs.get(("opd", budget)) and runs.get(("sft", budget)):
-            row["opd_minus_sft"] = _paired_over_seeds(runs[("opd", budget)], runs[("sft", budget)], n_boot)
+            if method != "sft" and files and runs.get(("sft", budget)):
+                row["deltas"][method] = _paired_over_seeds(files, runs[("sft", budget)], n_boot)
+        row["opd_minus_sft"] = row["deltas"].get("opd")
         points.append(row)
-    table: dict[str, Any] = {"task": task, "points": points}
+    table: dict[str, Any] = {"task": task, "methods": list(methods), "points": points}
     if baseline_json and Path(baseline_json).exists():
         table["baseline"] = summarize(baseline_json, n_boot=n_boot)
     if teacher_json and Path(teacher_json).exists():
@@ -208,15 +215,24 @@ def markdown_table_seeded(table: dict[str, Any]) -> str:
         seeds = f" (n={len(r['seeds'])}, sd {r['std_across_seeds']:.3f})" if len(r["seeds"]) > 1 else ""
         return f"{r['accuracy']:.3f} [{r['ci_low']:.3f}, {r['ci_high']:.3f}]{seeds}"
 
-    lines = ["| Questions | SFT | OPD | OPD - SFT (paired 95% CI, seeds) |", "|---|---|---|---|"]
+    methods = table.get("methods", list(METHODS))
+    others = [m for m in methods if m != "sft"]
+    head = "| Questions | " + " | ".join(m.upper() for m in methods) + " | vs SFT (paired 95% CI, seeds) |"
+    lines = [head, "|" + "---|" * (len(methods) + 2)]
+
+    def delta(p, m):
+        d = (p.get("deltas") or {}).get(m) if m != "opd" or "deltas" in p else p.get("opd_minus_sft")
+        if not d:
+            return f"{m}: pending"
+        return f"{m} {d['delta']:+.3f} [{d['ci_low']:+.3f}, {d['ci_high']:+.3f}] ({len(d['seeds'])} seeds)"
+
     for p in table["points"]:
-        d = p.get("opd_minus_sft")
-        delta = f"{d['delta']:+.3f} [{d['ci_low']:+.3f}, {d['ci_high']:+.3f}] over {len(d['seeds'])} seed(s)" if d else "pending"
-        lines.append(f"| {p['budget']} | {fmt(p['sft'])} | {fmt(p['opd'])} | {delta} |")
+        cells = " | ".join(fmt(p.get(m)) for m in methods)
+        lines.append(f"| {p['budget']} | {cells} | " + "; ".join(delta(p, m) for m in others) + " |")
     if table.get("baseline"):
-        lines.append(f"| 0 (zero-shot) | {table['baseline']['accuracy']:.3f} | same | |")
+        lines.append(f"| 0 (zero-shot) | {table['baseline']['accuracy']:.3f} | " + " | ".join("same" for _ in others) + " | |")
     if table.get("teacher"):
-        lines.append(f"| teacher | {table['teacher']['accuracy']:.3f} | | |")
+        lines.append(f"| teacher | {table['teacher']['accuracy']:.3f} | " + " | ".join("" for _ in others) + " | |")
     return "\n".join(lines)
 
 
@@ -233,6 +249,7 @@ def main() -> None:
     parser.add_argument("--n-boot", type=int, default=10000)
     parser.add_argument("--exclude-seeds", type=int, nargs="*", default=list(SMOKE_SEEDS),
                         help="Seeds to ignore (default: the smoke-test seed 99)")
+    parser.add_argument("--methods", nargs="+", default=list(METHODS), help="Columns, e.g. sft opd opd-term opd-t07")
     args = parser.parse_args()
     from ..experiment import baseline_result_name, load_tasks
 
@@ -240,7 +257,7 @@ def main() -> None:
     baseline = args.baseline or str(Path(args.out_dir) / baseline_result_name(args.task, task_cfg, "student"))
     teacher = args.teacher or str(Path(args.out_dir) / baseline_result_name(args.task, task_cfg, "teacher"))
     table = collect_seeded(args.out_dir, args.task, args.budgets, baseline, teacher, args.n_boot,
-                           exclude_seeds=tuple(args.exclude_seeds))
+                           exclude_seeds=tuple(args.exclude_seeds), methods=tuple(args.methods))
     out = Path(args.out_dir)
     (out / f"data_efficiency_{args.task}.json").write_text(json.dumps(table, indent=2))
     md = markdown_table_seeded(table)

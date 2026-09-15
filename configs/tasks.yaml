@@ -15,6 +15,11 @@ defaults:
   # results go to the Hub. `hub` pushes every merged model (the notebook-era behaviour), which exhausts the
   # 100 GB private-storage quota of a free Hub account after about twenty points.
   artifacts: {merged: local}
+  # OPD variants: `--method opd-<name>` runs the OPD trainer with these extra arguments and names every
+  # artifact `opd-<name>_...`, so a variant is a separate column in the aggregation tables.
+  opd_variants:
+    term: {terminated_only: true}   # loss only on rollouts that emitted EOS (on-policy analogue of SFT's filter)
+    t07: {temperature: 0.7}         # sample rollouts at the teacher-data temperature instead of 1.0
 
 tasks:
   chartqa_human:

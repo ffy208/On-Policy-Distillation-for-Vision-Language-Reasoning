@@ -109,3 +109,23 @@ def test_generation_budget_reaches_every_command():
     plan = run_point("chartqa_human", "sft", 100, 7, dry_run=True, sft_steps=5, skip_ood=True)
     ev = plan["commands"][-1]
     assert ev[2] == "vlm_opd.evaluate" and ev[ev.index("--max-new-tokens") + 1] == "512"
+
+
+def test_opd_variants_are_named_and_passed_to_the_trainer():
+    from vlm_opd.experiment import split_method, variant_args
+
+    cfg = load_tasks(TASKS_FILE)
+    d, t = cfg["defaults"], cfg["tasks"]["geometry3k"]
+    assert split_method("opd-term", d) == ("opd", {"terminated_only": True})
+    assert variant_args({"terminated_only": True, "temperature": 0.7}) == ["--terminated-only", "--temperature", "0.7"]
+    n = point_names("geometry3k", t, d, "opd-term", 900, 1)
+    assert n.result_name == "eval_opd-term_geometry3k_q900_s1.json" and n.ckpt_repo.endswith("opd-term_geometry3k_q900_s1_ckpt")
+    cmd = train_command("opd-t07", n, t, d, 900, 1, d["student"], d["teacher"], None, None)
+    assert "vlm_opd.opd_trainer" in cmd and cmd[cmd.index("--temperature") + 1] == "0.7"
+    with pytest.raises(ValueError):
+        split_method("opd-nope", d)
+    with pytest.raises(ValueError):
+        split_method("sft-term", d)
+    # seed-42 ChartQA legacy names never apply to a variant
+    c = cfg["tasks"]["chartqa_human"]
+    assert point_names("chartqa_human", c, d, "opd-term", 300, 42).result_name == "eval_opd-term_chartqa_human_q300_s42.json"

@@ -58,19 +58,19 @@ Intervals are bootstrap over questions pooled across seeds; the paired delta is 
 
 Update counts are fixed across budgets so data quantity is the only variable: SFT runs 302 optimizer steps everywhere (2 epochs at 3000), OPD runs 150 steps of batch 16 everywhere. Caveats: 900 and 3000 remain single-seed; the 3000-question OPD run covers each question less than once, so it is undertrained relative to SFT's 2 epochs. The 100- and 300-question points were run on Georgia Tech PACE (L40S, 13.5 s per OPD step); the others on Colab (A100).
 
-### Second task: Geometry3K (2026-09-13, one seed, 500 test problems, 1536-token generation budget)
+### Second task: Geometry3K (2026-09-13/14, 500 test problems, 1536-token generation budget; 4 seeds at 300 and 900)
 
-The crossover does not replicate on geometry. Here SFT beats OPD at three of four budgets, and the reason is
-visible in the outputs.
+The crossover does not replicate on geometry. SFT beats OPD clearly at 900 and 2101 problems, the two tie at
+300, and the reason is visible in the outputs.
 
 ![Accuracy versus training problems on Geometry3K](docs/assets/data_efficiency_geometry3k.png)
 
 | Training problems | SFT | OPD | OPD - SFT, paired 95% CI |
 |---|---|---|---|
-| 100 (5%) | 0.456 [0.412, 0.500] | 0.404 [0.362, 0.446] | -0.052 [-0.092, -0.014] |
-| 300 (14%) | 0.422 [0.380, 0.464] | 0.422 [0.380, 0.466] | +0.000 [-0.038, +0.038] |
-| 900 (43%) | 0.476 [0.432, 0.520] | 0.396 [0.354, 0.438] | -0.080 [-0.122, -0.038] |
-| 2101 (100%) | 0.484 [0.442, 0.526] | 0.414 [0.372, 0.458] | -0.070 [-0.110, -0.028] |
+| 100 (5%), 1 seed | 0.456 [0.412, 0.500] | 0.404 [0.362, 0.446] | -0.052 [-0.092, -0.014] |
+| 300 (14%), 4 seeds | 0.420 [0.398, 0.442], sd 0.013 | 0.419 [0.398, 0.441], sd 0.019 | -0.001 [-0.020, +0.018] |
+| 900 (43%), 4 seeds | 0.481 [0.460, 0.503], sd 0.022 | 0.402 [0.381, 0.424], sd 0.006 | -0.079 [-0.100, -0.059] |
+| 2101 (100%), 1 seed | 0.484 [0.442, 0.526] | 0.414 [0.372, 0.458] | -0.070 [-0.110, -0.028] |
 | zero-shot student / teacher | 0.366 / 0.570 | | |
 
 Why OPD loses here (per-record breakdown of the same files):
@@ -79,8 +79,8 @@ Why OPD loses here (per-record breakdown of the same files):
 |---|---|---|---|
 | student zero-shot | 0.648 | 0.565 | 104 / 176 |
 | teacher zero-shot | 0.782 | 0.727 | 88 / 108 |
-| SFT (100 to 2101) | 0.72 to 0.80 | 0.57 to 0.63 | 59 to 109 |
-| OPD (100 to 2101) | 0.60 to 0.64 | 0.63 to 0.70 | 139 to 153 |
+| SFT, 300 / 900 (4 seeds each) | 0.73 / 0.76 | 0.56 to 0.66 | 79 to 109 per run |
+| OPD, 300 / 900 (4 seeds each) | 0.62 / 0.63 | 0.63 to 0.70 | 142 to 156 per run |
 
 When an OPD student finishes, it is as accurate as or more accurate than the SFT student; it loses because a third
 of its solutions never terminate. The teacher has the same habit (22% of its own solutions run past 1536 tokens),
@@ -89,7 +89,22 @@ per-step log shows the EOS rate of the rollouts flat at 0.5 to 0.6 for all 150 s
 near zero (there is rarely an answer to disagree on). SFT trains only on teacher solutions that terminated with a
 correct answer, so the rejection-sampling filter, not the objective, teaches termination. This is the "when not"
 of the study: with a teacher that is unreliable at finishing, on-policy matching copies the failure and
-filtered off-policy data does not. A control that trains SFT on unfiltered teacher samples is queued.
+filtered off-policy data does not.
+
+**Control: SFT on unfiltered teacher samples (4 seeds).** To test that the filter, not the objective, is what
+separates the methods, SFT was retrained on the teacher's first sample for every problem, correct or not (the
+same output distribution OPD matches):
+
+| 4 seeds | Format rate | Accuracy | Paired vs the other two |
+|---|---|---|---|
+| 300: SFT filtered / SFT unfiltered / OPD | 0.728 / 0.621 / 0.617 | 0.420 / 0.402 / 0.419 | filtered - unfiltered +1.8 [-0.3, +3.8]; OPD - unfiltered +1.8 [-0.3, +3.7] |
+| 900: SFT filtered / SFT unfiltered / OPD | 0.760 / 0.693 / 0.628 | 0.481 / 0.445 / 0.402 | filtered - unfiltered +3.6 [+1.7, +5.6]; OPD - unfiltered -4.3 [-6.1, -2.4] |
+
+Remove the filter and SFT terminates exactly as rarely as OPD at 300 problems (0.62 in both) and loses its edge.
+At 900 the filter explains about half of the 7.9-point gap; the other half is that even unfiltered teacher samples
+(temperature 0.7, 78% terminating) teach termination better than the student's own temperature-1.0 rollouts
+(56% terminating), which OPD never pushes toward stopping. Two OPD variants follow from this and are queued:
+loss only on terminated rollouts (`opd-term`) and rollouts sampled at 0.7 (`opd-t07`).
 
 ### Out-of-distribution chart benchmarks (2026-09-11, ChartQA-trained models, 4 seeds per point)
 
@@ -291,5 +306,6 @@ OPD for LLMs: MiniLLM and GKD (Agarwal et al., 2024); Thinking Machines' 2025 wr
 - [x] Stage 4: token-level feedback before and after OPD
 - [x] 100-question point and 4 seeds at 100 and 300 (PACE, 2026-09-10): OPD's advantage holds at +1.8 and +2.7 points with intervals excluding zero
 - [x] OOD evaluation on CharXiv and ChartQAPro (2026-09-11): negative result, both methods gain 2 to 5 points, OPD lead only at 100 questions on CharXiv
-- [x] Geometry3K curve (2026-09-13, one seed): SFT beats OPD; OPD inherits the teacher's non-terminating solutions, SFT's correctness filter removes them
+- [x] Geometry3K curve (2026-09-13/14, 4 seeds at 300 and 900): SFT beats OPD at 900 by 7.9 points, tie at 300; OPD inherits the teacher's non-terminating solutions
+- [x] Unfiltered-SFT control (2026-09-14, 4 seeds): removing the correctness filter drops SFT to OPD's termination rate; explains the whole gap at 300 and half at 900
 - [ ] Optional: forward-KL ablation; longer OPD run at 3000 questions; seeds at 900 and 3000; Geometry3K curve; OOD evaluation on CharXiv and ChartQAPro; self-distillation conditions

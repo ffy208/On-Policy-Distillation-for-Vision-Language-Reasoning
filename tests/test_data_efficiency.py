@@ -83,9 +83,9 @@ def test_collect_seeded_pools_and_pairs_by_seed(tmp_path):
     assert p300["sft"]["seeds"] == [1, 2, 3] and p300["sft"]["n"] == 600
     assert 0.7 < p300["sft"]["accuracy"] < 0.8 and p300["sft"]["std_across_seeds"] >= 0
     assert p300["opd_minus_sft"]["seeds"] == [1, 2, 3] and p300["opd_minus_sft"]["delta"] > 0.05
-    assert table["points"][1]["opd"] is None and "opd_minus_sft" not in table["points"][1]
+    assert table["points"][1]["opd"] is None and table["points"][1]["opd_minus_sft"] is None
     md = markdown_table_seeded(table)
-    assert "n=3" in md and "over 3 seed(s)" in md and "pending" in md
+    assert "n=3" in md and "(3 seeds)" in md and "pending" in md
 
 
 def test_find_runs_ignores_smoke_seed(tmp_path):
@@ -95,3 +95,24 @@ def test_find_runs_ignores_smoke_seed(tmp_path):
         (tmp_path / name).write_text("{}")
     assert sorted(find_runs(tmp_path, "chartqa_human")[("opd", 100)]) == [1]
     assert sorted(find_runs(tmp_path, "chartqa_human", exclude_seeds=())[("opd", 100)]) == [1, 99]
+
+
+def test_collect_seeded_with_variant_columns(tmp_path):
+    import json
+
+    from vlm_opd.analysis.data_efficiency import collect_seeded, markdown_table_seeded
+
+    def write(name, correct):
+        (tmp_path / name).write_text(json.dumps({"records": [{"id": f"t{i:03d}", "correct": c} for i, c in enumerate(correct)]}))
+
+    n = 40
+    for s in (1, 2):
+        write(f"eval_sft_geometry3k_q900_s{s}.json", [i % 2 == 0 for i in range(n)])
+        write(f"eval_opd_geometry3k_q900_s{s}.json", [i % 4 == 0 for i in range(n)])
+        write(f"eval_opd-term_geometry3k_q900_s{s}.json", [i % 4 != 3 for i in range(n)])
+    table = collect_seeded(tmp_path, "geometry3k", [900], n_boot=200, methods=("sft", "opd", "opd-term"))
+    row = table["points"][0]
+    assert row["opd-term"]["accuracy"] == 0.75 and row["opd"]["accuracy"] == 0.25 and row["sft"]["accuracy"] == 0.5
+    assert abs(row["deltas"]["opd-term"]["delta"] - 0.25) < 1e-9 and row["opd_minus_sft"]["delta"] < 0
+    md = markdown_table_seeded(table)
+    assert "OPD-TERM" in md and "opd-term +0.250" in md

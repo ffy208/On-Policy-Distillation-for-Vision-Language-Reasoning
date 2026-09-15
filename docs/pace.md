@@ -75,7 +75,17 @@ This writes `outputs/data_efficiency_chartqa_human.{json,md,png}` with per-seed 
 across-seed mean and standard deviation, a bootstrap interval pooled over questions of all seeds,
 and the OPD minus SFT paired bootstrap computed over the seeds both methods share.
 
-## Next batch (2026-09-11): OOD evaluation and the second task
+## Next batch (2026-09-14): OPD variants on Geometry3K
+
+```bash
+slurm/sweep.sh geometry3k "900" "42 1 2 3" "opd-term opd-t07"    # 8 OPD jobs, ~4 h each on L40S
+python -m vlm_opd.analysis.data_efficiency --task geometry3k --budgets 300 900 --methods sft opd opd-term opd-t07
+```
+
+`opd-<name>` methods are defined under `opd_variants` in `configs/tasks.yaml` and name their artifacts
+`opd-<name>_...`, so they aggregate as extra columns.
+
+## Earlier batch (2026-09-11): OOD evaluation and the second task
 
 ```bash
 slurm/sweep.sh chartqa_human "" "" baseline                     # zero-shot student + teacher on ChartQA, CharXiv, ChartQAPro

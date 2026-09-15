@@ -42,6 +42,31 @@ def load_tasks(path: str | Path = TASKS_FILE) -> dict[str, Any]:
     return yaml.safe_load(Path(path).read_text())
 
 
+def split_method(method: str, defaults: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """`opd-term` -> ("opd", {"terminated_only": True}); plain methods return no extra arguments."""
+    base, _, variant = method.partition("-")
+    if base not in METHODS:
+        raise ValueError(f"method must be one of {METHODS} (optionally opd-<variant>), got {method!r}")
+    if not variant:
+        return base, {}
+    variants = defaults.get("opd_variants", {})
+    if base != "opd" or variant not in variants:
+        raise ValueError(f"unknown variant {method!r}; opd_variants in tasks.yaml: {sorted(variants)}")
+    return base, dict(variants[variant])
+
+
+def variant_args(extra: dict[str, Any]) -> list[str]:
+    """Trainer argv for a variant's overrides: {temperature: 0.7, terminated_only: True} -> [--temperature, 0.7, --terminated-only]."""
+    out: list[str] = []
+    for key, value in extra.items():
+        flag = "--" + key.replace("_", "-")
+        if value is True:
+            out.append(flag)
+        elif value is not False and value is not None:
+            out += [flag, str(value)]
+    return out
+
+
 @dataclass(frozen=True)
 class PointNames:
     """Every name derived from (task, method, budget, seed)."""
@@ -81,10 +106,9 @@ def eval_model(names: PointNames, defaults: dict[str, Any]) -> str:
 
 def point_names(task: str, task_cfg: dict[str, Any], defaults: dict[str, Any], method: str, budget: int, seed: int) -> PointNames:
     """Hub repo names and result file name for one point. Seed-42 ChartQA points keep the notebook-era names."""
-    if method not in METHODS:
-        raise ValueError(f"method must be one of {METHODS}")
+    base_method, _ = split_method(method, defaults)
     user = defaults["hub_user"]
-    legacy = task_cfg.get("legacy_seed") == seed and task_cfg.get("legacy_prefix")
+    legacy = task_cfg.get("legacy_seed") == seed and task_cfg.get("legacy_prefix") and method in METHODS
     if legacy:
         prefix = task_cfg["legacy_prefix"]
         return PointNames(
@@ -100,7 +124,7 @@ def point_names(task: str, task_cfg: dict[str, Any], defaults: dict[str, Any], m
         out_dir=f"ckpt/{base}",
         result_name=f"eval_{base}.json",
         merged_repo=f"{user}/vlm_opd_{base}_merged",
-        ckpt_repo=f"{user}/vlm_opd_{base}_ckpt" if method == "opd" else None,
+        ckpt_repo=f"{user}/vlm_opd_{base}_ckpt" if base_method == "opd" else None,
     )
 
 
@@ -110,6 +134,7 @@ def train_command(method: str, names: PointNames, task_cfg: dict[str, Any], defa
     py = sys.executable
     style = ["--prompt-style", task_cfg.get("prompt_style", "chart")]
     local = merged_mode(defaults) == "local"
+    method, extra = split_method(method, defaults)
     if method == "sft":
         c = defaults["sft"]
         publish = ["--merge", "--push-adapter-repo", names.adapter_repo] if local else ["--push-merged-repo", names.merged_repo]
@@ -125,7 +150,7 @@ def train_command(method: str, names: PointNames, task_cfg: dict[str, Any], defa
             "--micro-batch", str(c["micro_batch"]), "--lr", str(c["lr"]), "--ckpt-every", str(c["ckpt_every"]),
             "--kl-direction", c["kl_direction"], "--seed", str(seed),
             "--max-new-tokens", str(generation_budget(task_cfg, defaults)),
-            "--ckpt-repo", names.ckpt_repo or "", *publish]
+            "--ckpt-repo", names.ckpt_repo or "", *publish, *variant_args(extra)]
 
 
 def eval_command(model_repo: str, data_repo: str, out_path: str | Path, tag: str, seed: int, gpu_mem: float,
@@ -242,7 +267,7 @@ def run_point(task: str, method: str, budget: int, seed: int, tasks_file: str | 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run one (task, method, budget, seed) experiment point")
     parser.add_argument("--task", required=True)
-    parser.add_argument("--method", choices=(*METHODS, BASELINE), required=True)
+    parser.add_argument("--method", required=True, help="sft, opd, opd-<variant> (see opd_variants in tasks.yaml), or baseline")
     parser.add_argument("--budget", type=int, default=0, help="Number of training questions (ignored for baseline)")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--student", default=None)

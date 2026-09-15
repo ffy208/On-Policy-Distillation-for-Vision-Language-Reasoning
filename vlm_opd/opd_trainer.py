@@ -66,6 +66,10 @@ class OPDConfig:
     ckpt_repo: str | None = None
     merged_repo: str | None = None
     merge: bool = True  # write out_dir/merged (base + LoRA) for local evaluation even without a merged_repo
+    # Train only on rollouts that emitted EOS within max_new_tokens. The on-policy analogue of SFT's
+    # rejection-sampling filter: on Geometry3K the teacher itself fails to terminate a fifth of the time and
+    # vanilla OPD inherits it; this drops the non-terminating rollouts from the loss (they are still logged).
+    terminated_only: bool = False
     batch_size: int = 8
     micro_batch: int = 4
     max_new_tokens: int = 512
@@ -164,7 +168,9 @@ def opd_step(student, teacher, processor, rows: list[dict[str, Any]], cfg: OPDCo
     mm = inputs.get("mm_token_type_ids")
     if mm is not None:
         mm = torch.cat([mm, torch.zeros((batch_size, gen_len), dtype=mm.dtype, device=device)], dim=1)
-    n_tokens = gen_mask.sum().clamp_min(1).float()
+    ended = (sequences[:, prompt_len:] == eos_id).any(dim=1)
+    loss_mask = gen_mask & ended[:, None] if cfg.terminated_only else gen_mask
+    n_tokens = loss_mask.sum().clamp_min(1).float()
 
     kl_sum = torch.zeros((), device=device)
     kl_rows: list[torch.Tensor] = []  # detached per-token KL per row, for the role breakdown
@@ -187,8 +193,8 @@ def opd_step(student, teacher, processor, rows: list[dict[str, Any]], cfg: OPDCo
         t2 = time.time()
         student_logits = student(**kwargs).logits
         kl = per_token_kl(student_logits, teacher_logits, cfg.kl_direction)
-        mask = gen_mask[start:end]
-        loss = (kl * mask).sum() / n_tokens  # token-mean over the whole batch, accumulated across micro-batches
+        mask = loss_mask[start:end]
+        loss = (kl * mask).sum() / n_tokens  # token-mean over the trained rollouts, accumulated across micro-batches
         loss.backward()
         t_student += time.time() - t2
         kl_sum += (kl.detach() * mask).sum()
@@ -197,7 +203,6 @@ def opd_step(student, teacher, processor, rows: list[dict[str, Any]], cfg: OPDCo
 
     # Rollout quality signals (no gradient): length, stopping, answer format, correctness vs gold
     lengths = gen_mask.sum(dim=1)
-    ended = (sequences[:, prompt_len:] == eos_id).any(dim=1)
     texts = [tok.decode(sequences[i, prompt_len:][gen_mask[i]], skip_special_tokens=True) for i in range(batch_size)]
     preds = [parse_answer(t) for t in texts]
     golds = [r.get("answer") for r in rows]
@@ -212,6 +217,7 @@ def opd_step(student, teacher, processor, rows: list[dict[str, Any]], cfg: OPDCo
         "gen_len_mean": lengths.float().mean().item(),
         "gen_len_max": int(lengths.max().item()),
         "eos_rate": ended.float().mean().item(),
+        "n_train_rollouts": int(ended.sum().item()) if cfg.terminated_only else batch_size,
         "format_rate": sum(p is not None for p in preds) / batch_size,
         "rollout_acc": (sum(correct) / len(correct)) if correct else None,
         "prompt_len": prompt_len,
@@ -362,6 +368,7 @@ def main() -> None:
     parser.add_argument("--ckpt-repo", default=None)
     parser.add_argument("--merged-repo", default=None, help="Push the merged model here (large: ~4 GB per run)")
     parser.add_argument("--no-merge", action="store_true", help="Skip writing out_dir/merged")
+    parser.add_argument("--terminated-only", action="store_true", help="Loss only on rollouts that emitted EOS")
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--micro-batch", type=int, default=4)
     parser.add_argument("--max-new-tokens", type=int, default=512)
@@ -384,7 +391,7 @@ def main() -> None:
     cfg = OPDConfig(
         data_repo=args.data_repo, out_dir=args.out_dir, student_model=args.student, teacher_model=args.teacher,
         ckpt_repo=args.ckpt_repo or None, merged_repo=args.merged_repo or None, merge=not args.no_merge,
-        batch_size=args.batch_size,
+        terminated_only=args.terminated_only, batch_size=args.batch_size,
         micro_batch=args.micro_batch, max_new_tokens=args.max_new_tokens, temperature=args.temperature,
         top_p=args.top_p, kl_direction=args.kl_direction, learning_rate=args.lr, total_steps=args.total_steps,
         warmup_steps=args.warmup_steps, grad_clip=args.grad_clip, lora_r=args.lora_r, ckpt_every=args.ckpt_every,

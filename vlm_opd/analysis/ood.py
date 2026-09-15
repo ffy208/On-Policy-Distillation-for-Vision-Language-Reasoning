@@ -19,7 +19,7 @@ from ..experiment import baseline_result_name, load_tasks
 from .data_efficiency import SMOKE_SEEDS, _paired_over_seeds, _pooled
 from .stats import summarize
 
-_SEEDED = re.compile(r"^eval_(?P<method>sft|opd)_(?P<task>.+?)_q(?P<budget>\d+)_s(?P<seed>\d+)_on_(?P<set>.+)\.json$")
+_SEEDED = re.compile(r"^eval_(?P<method>sft|opd(?:-[a-z0-9]+)?)_(?P<task>.+?)_q(?P<budget>\d+)_s(?P<seed>\d+)_on_(?P<set>.+)\.json$")
 _LEGACY = re.compile(r"^eval_(?P<method>sft|opd)_q(?P<budget>\d+)_on_(?P<set>.+)\.json$")
 
 
